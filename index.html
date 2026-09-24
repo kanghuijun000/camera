@@ -1,94 +1,49 @@
-```html
 <!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-    >
-
-    <meta name="theme-color" content="#000000">
-
-    <title>Camera</title>
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>카메라</title>
     <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
 
-    <!-- =========================
-         카메라 화면
-    ========================== -->
+    <!-- 카메라 화면 -->
+    <div id="cameraScreen" class="screen active">
 
-    <main id="cameraScreen" class="screen active">
+        <video id="cameraPreview" autoplay playsinline muted></video>
 
-        <video
-            id="cameraPreview"
-            autoplay
-            playsinline
-            muted
-        ></video>
-
-        <!-- 카메라 꺼짐 -->
-        <div id="cameraOffScreen" class="camera-off-screen hidden">
-
-            <div class="camera-off-icon">
-                ◉
-            </div>
-
-            <p>
-                카메라가 꺼져 있습니다.
-            </p>
-
+        <!-- 카메라가 꺼졌을 때 -->
+        <div id="cameraOffScreen" class="camera-off hidden">
+            <div class="off-icon">📷</div>
+            <div>카메라가 꺼져 있습니다</div>
         </div>
-
 
         <!-- 카메라 오류 -->
         <div id="cameraError" class="camera-error hidden">
-
-            <p id="cameraErrorText">
-                카메라를 사용할 수 없습니다.
-            </p>
-
-            <button id="retryCamera">
-                다시 시도
-            </button>
-
+            <div id="cameraErrorText">카메라를 사용할 수 없습니다.</div>
+            <button id="retryCameraButton">다시 시도</button>
         </div>
 
-
-        <!-- 위쪽 -->
+        <!-- 상단 -->
         <div class="top-bar">
 
-            <button
-                id="galleryButton"
-                class="icon-button"
-                type="button"
-            >
-                <span>▣</span>
-                <small>갤러리</small>
+            <button id="cameraPowerButton" class="top-button">
+                ⏻
+            </button>
+
+            <div id="zoomIndicator" class="zoom-indicator">
+                1.0×
+            </div>
+
+            <button id="switchCameraButton" class="top-button">
+                🔄
             </button>
 
         </div>
 
-
-        <!-- 줌 표시 -->
-        <div
-            id="zoomIndicator"
-            class="zoom-indicator"
-        >
-            1×
-        </div>
-
-
-        <!-- 줌 슬라이더 -->
-        <div
-            id="zoomControl"
-            class="zoom-control"
-        >
-
+        <!-- 줌 -->
+        <div id="zoomControl" class="zoom-control">
             <span>1×</span>
 
             <input
@@ -98,158 +53,96 @@
                 max="5"
                 step="0.1"
                 value="1"
-                aria-label="카메라 줌"
             >
 
-            <span id="maxZoomText">
-                5×
-            </span>
-
+            <span>5×</span>
         </div>
 
-
-        <!-- 아래쪽 -->
+        <!-- 하단 카메라 컨트롤 -->
         <div class="camera-controls">
 
-            <!-- 카메라 전원 -->
-            <button
-                id="cameraPowerButton"
-                class="control-button camera-on"
-                type="button"
-            >
-
-                <span id="cameraPowerIcon">
-                    ●
-                </span>
-
-                <small id="cameraPowerText">
-                    끄기
-                </small>
-
+            <button id="galleryButton" class="gallery-open-button">
+                <span>🖼️</span>
+                <small>갤러리</small>
             </button>
 
-
-            <!-- 전후면 전환 -->
-            <button
-                id="switchCamera"
-                class="control-button"
-                type="button"
-            >
-
-                <span>
-                    ↻
-                </span>
-
-                <small>
-                    전환
-                </small>
-
-            </button>
-
-
-            <!-- 촬영 -->
-            <button
-                id="captureButton"
-                class="capture-button"
-                type="button"
-            >
-
+            <button id="captureButton" class="capture-button">
                 <span></span>
-
             </button>
 
-
-            <div class="control-placeholder"></div>
+            <div class="control-space"></div>
 
         </div>
 
-    </main>
+    </div>
 
 
-    <!-- =========================
-         갤러리
-    ========================== -->
+    <!-- 갤러리 -->
+    <div id="galleryScreen" class="screen">
 
-    <main id="galleryScreen" class="screen">
+        <div class="gallery-header">
 
-        <header class="gallery-header">
-
-            <button
-                id="backToCamera"
-                class="back-button"
-                type="button"
-            >
-                ‹
+            <button id="galleryBackButton" class="header-button">
+                ←
             </button>
 
-            <h1>
-                갤러리
-            </h1>
+            <h1>갤러리</h1>
 
-            <span id="photoCount">
-                0장
-            </span>
+            <div class="header-space"></div>
 
-        </header>
+        </div>
+
+        <div id="galleryGrid" class="gallery-grid"></div>
+
+        <div id="emptyGallery" class="empty-gallery">
+            <div class="empty-icon">🖼️</div>
+            <p>촬영한 사진이 없습니다.</p>
+        </div>
+
+    </div>
 
 
-        <div
-            id="galleryGrid"
-            class="gallery-grid"
-        ></div>
+    <!-- 사진 크게 보기 -->
+    <div id="photoViewer" class="photo-viewer hidden">
 
+        <div class="viewer-top">
 
-        <div
-            id="emptyGallery"
-            class="empty-gallery"
-        >
+            <button id="viewerCloseButton" class="viewer-button">
+                ✕
+            </button>
 
-            <div class="empty-icon">
-                ▧
+            <div id="viewerZoomText">
+                1.0×
             </div>
 
-            <p>
-                촬영한 사진이 없습니다.
-            </p>
+            <button id="deletePhotoButton" class="viewer-button delete-button">
+                🗑️
+            </button>
 
         </div>
 
-    </main>
+
+        <!-- 사진 영역 -->
+        <div id="photoZoomArea" class="photo-zoom-area">
+
+            <img id="viewerImage" src="" alt="사진">
+
+        </div>
 
 
-    <!-- =========================
-         사진 크게 보기
-    ========================== -->
+        <!-- 확대/축소 -->
+        <div class="viewer-controls">
 
-    <div
-        id="photoViewer"
-        class="photo-viewer hidden"
-    >
+            <button id="zoomOutButton" class="viewer-zoom-button">
+                −
+            </button>
 
-        <button
-            id="closeViewer"
-            class="viewer-close"
-            type="button"
-        >
-            ×
-        </button>
+            <button id="resetZoomButton" class="viewer-reset-button">
+                원본
+            </button>
 
-
-        <img
-            id="viewerImage"
-            src=""
-            alt="촬영한 사진"
-        >
-
-
-        <div class="viewer-bottom">
-
-            <button
-                id="deletePhoto"
-                class="delete-button"
-                type="button"
-            >
-                삭제
+            <button id="zoomInButton" class="viewer-zoom-button">
+                ＋
             </button>
 
         </div>
@@ -257,12 +150,7 @@
     </div>
 
 
-    <!-- 사진 생성용 -->
-    <canvas id="photoCanvas"></canvas>
-
-
     <script src="script.js"></script>
 
 </body>
 </html>
-```
