@@ -1,44 +1,163 @@
+```html
 <!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    >
+
     <meta name="theme-color" content="#000000">
+
     <title>Camera</title>
+
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
-    <!-- 카메라 화면 -->
+    <!-- =========================
+         카메라 화면
+    ========================== -->
+
     <main id="cameraScreen" class="screen active">
 
-        <video id="cameraPreview" autoplay playsinline></video>
+        <video
+            id="cameraPreview"
+            autoplay
+            playsinline
+            muted
+        ></video>
+
+        <!-- 카메라 꺼짐 -->
+        <div id="cameraOffScreen" class="camera-off-screen hidden">
+
+            <div class="camera-off-icon">
+                ◉
+            </div>
+
+            <p>
+                카메라가 꺼져 있습니다.
+            </p>
+
+        </div>
+
 
         <!-- 카메라 오류 -->
         <div id="cameraError" class="camera-error hidden">
-            <p>카메라를 사용할 수 없습니다.</p>
-            <button id="retryCamera">다시 시도</button>
+
+            <p id="cameraErrorText">
+                카메라를 사용할 수 없습니다.
+            </p>
+
+            <button id="retryCamera">
+                다시 시도
+            </button>
+
         </div>
 
-        <!-- 위쪽 버튼 -->
+
+        <!-- 위쪽 -->
         <div class="top-bar">
-            <button id="galleryButton" class="icon-button">
+
+            <button
+                id="galleryButton"
+                class="icon-button"
+                type="button"
+            >
                 <span>▣</span>
                 <small>갤러리</small>
             </button>
+
         </div>
 
-        <!-- 아래쪽 카메라 조작 -->
+
+        <!-- 줌 표시 -->
+        <div
+            id="zoomIndicator"
+            class="zoom-indicator"
+        >
+            1×
+        </div>
+
+
+        <!-- 줌 슬라이더 -->
+        <div
+            id="zoomControl"
+            class="zoom-control"
+        >
+
+            <span>1×</span>
+
+            <input
+                id="zoomSlider"
+                type="range"
+                min="1"
+                max="5"
+                step="0.1"
+                value="1"
+                aria-label="카메라 줌"
+            >
+
+            <span id="maxZoomText">
+                5×
+            </span>
+
+        </div>
+
+
+        <!-- 아래쪽 -->
         <div class="camera-controls">
 
-            <button id="switchCamera" class="control-button">
-                <span>↻</span>
-                <small>전환</small>
+            <!-- 카메라 전원 -->
+            <button
+                id="cameraPowerButton"
+                class="control-button camera-on"
+                type="button"
+            >
+
+                <span id="cameraPowerIcon">
+                    ●
+                </span>
+
+                <small id="cameraPowerText">
+                    끄기
+                </small>
+
             </button>
 
-            <button id="captureButton" class="capture-button">
-                <span></span>
+
+            <!-- 전후면 전환 -->
+            <button
+                id="switchCamera"
+                class="control-button"
+                type="button"
+            >
+
+                <span>
+                    ↻
+                </span>
+
+                <small>
+                    전환
+                </small>
+
             </button>
+
+
+            <!-- 촬영 -->
+            <button
+                id="captureButton"
+                class="capture-button"
+                type="button"
+            >
+
+                <span></span>
+
+            </button>
+
 
             <div class="control-placeholder"></div>
 
@@ -47,44 +166,103 @@
     </main>
 
 
-    <!-- 갤러리 화면 -->
+    <!-- =========================
+         갤러리
+    ========================== -->
+
     <main id="galleryScreen" class="screen">
 
         <header class="gallery-header">
-            <button id="backToCamera" class="back-button">‹</button>
-            <h1>갤러리</h1>
-            <span id="photoCount">0장</span>
+
+            <button
+                id="backToCamera"
+                class="back-button"
+                type="button"
+            >
+                ‹
+            </button>
+
+            <h1>
+                갤러리
+            </h1>
+
+            <span id="photoCount">
+                0장
+            </span>
+
         </header>
 
-        <div id="galleryGrid" class="gallery-grid"></div>
 
-        <div id="emptyGallery" class="empty-gallery">
-            <div class="empty-icon">▧</div>
-            <p>촬영한 사진이 없습니다.</p>
+        <div
+            id="galleryGrid"
+            class="gallery-grid"
+        ></div>
+
+
+        <div
+            id="emptyGallery"
+            class="empty-gallery"
+        >
+
+            <div class="empty-icon">
+                ▧
+            </div>
+
+            <p>
+                촬영한 사진이 없습니다.
+            </p>
+
         </div>
 
     </main>
 
 
-    <!-- 사진 크게 보기 -->
-    <div id="photoViewer" class="photo-viewer hidden">
+    <!-- =========================
+         사진 크게 보기
+    ========================== -->
 
-        <button id="closeViewer" class="viewer-close">×</button>
+    <div
+        id="photoViewer"
+        class="photo-viewer hidden"
+    >
 
-        <img id="viewerImage" src="" alt="사진">
+        <button
+            id="closeViewer"
+            class="viewer-close"
+            type="button"
+        >
+            ×
+        </button>
+
+
+        <img
+            id="viewerImage"
+            src=""
+            alt="촬영한 사진"
+        >
+
 
         <div class="viewer-bottom">
-            <button id="deletePhoto" class="delete-button">
+
+            <button
+                id="deletePhoto"
+                class="delete-button"
+                type="button"
+            >
                 삭제
             </button>
+
         </div>
 
     </div>
 
 
-    <!-- 사진 저장용 캔버스 -->
+    <!-- 사진 생성용 -->
     <canvas id="photoCanvas"></canvas>
 
+
     <script src="script.js"></script>
+
 </body>
 </html>
+```
