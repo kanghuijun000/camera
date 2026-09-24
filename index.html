@@ -1,1 +1,90 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#000000">
+    <title>Camera</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
 
+    <!-- 카메라 화면 -->
+    <main id="cameraScreen" class="screen active">
+
+        <video id="cameraPreview" autoplay playsinline></video>
+
+        <!-- 카메라 오류 -->
+        <div id="cameraError" class="camera-error hidden">
+            <p>카메라를 사용할 수 없습니다.</p>
+            <button id="retryCamera">다시 시도</button>
+        </div>
+
+        <!-- 위쪽 버튼 -->
+        <div class="top-bar">
+            <button id="galleryButton" class="icon-button">
+                <span>▣</span>
+                <small>갤러리</small>
+            </button>
+        </div>
+
+        <!-- 아래쪽 카메라 조작 -->
+        <div class="camera-controls">
+
+            <button id="switchCamera" class="control-button">
+                <span>↻</span>
+                <small>전환</small>
+            </button>
+
+            <button id="captureButton" class="capture-button">
+                <span></span>
+            </button>
+
+            <div class="control-placeholder"></div>
+
+        </div>
+
+    </main>
+
+
+    <!-- 갤러리 화면 -->
+    <main id="galleryScreen" class="screen">
+
+        <header class="gallery-header">
+            <button id="backToCamera" class="back-button">‹</button>
+            <h1>갤러리</h1>
+            <span id="photoCount">0장</span>
+        </header>
+
+        <div id="galleryGrid" class="gallery-grid"></div>
+
+        <div id="emptyGallery" class="empty-gallery">
+            <div class="empty-icon">▧</div>
+            <p>촬영한 사진이 없습니다.</p>
+        </div>
+
+    </main>
+
+
+    <!-- 사진 크게 보기 -->
+    <div id="photoViewer" class="photo-viewer hidden">
+
+        <button id="closeViewer" class="viewer-close">×</button>
+
+        <img id="viewerImage" src="" alt="사진">
+
+        <div class="viewer-bottom">
+            <button id="deletePhoto" class="delete-button">
+                삭제
+            </button>
+        </div>
+
+    </div>
+
+
+    <!-- 사진 저장용 캔버스 -->
+    <canvas id="photoCanvas"></canvas>
+
+    <script src="script.js"></script>
+</body>
+</html>
