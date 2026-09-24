@@ -1,92 +1,49 @@
-```javascript
-/* =========================================
-   카메라 앱
-========================================= */
+/* =========================================================
+   기본 요소
+========================================================= */
+
+const cameraScreen = document.getElementById("cameraScreen");
+const galleryScreen = document.getElementById("galleryScreen");
+
+const cameraPreview = document.getElementById("cameraPreview");
+
+const cameraOffScreen = document.getElementById("cameraOffScreen");
+const cameraError = document.getElementById("cameraError");
+const cameraErrorText = document.getElementById("cameraErrorText");
+
+const retryCameraButton = document.getElementById("retryCameraButton");
+
+const cameraPowerButton = document.getElementById("cameraPowerButton");
+const switchCameraButton = document.getElementById("switchCameraButton");
+
+const captureButton = document.getElementById("captureButton");
+
+const galleryButton = document.getElementById("galleryButton");
+const galleryBackButton = document.getElementById("galleryBackButton");
+
+const zoomSlider = document.getElementById("zoomSlider");
+const zoomIndicator = document.getElementById("zoomIndicator");
+
+const galleryGrid = document.getElementById("galleryGrid");
+const emptyGallery = document.getElementById("emptyGallery");
+
+const photoViewer = document.getElementById("photoViewer");
+const viewerImage = document.getElementById("viewerImage");
+const photoZoomArea = document.getElementById("photoZoomArea");
+
+const viewerCloseButton = document.getElementById("viewerCloseButton");
+const deletePhotoButton = document.getElementById("deletePhotoButton");
+
+const zoomInButton = document.getElementById("zoomInButton");
+const zoomOutButton = document.getElementById("zoomOutButton");
+const resetZoomButton = document.getElementById("resetZoomButton");
+
+const viewerZoomText = document.getElementById("viewerZoomText");
 
 
-/* =========================================
-   HTML 요소
-========================================= */
-
-const cameraPreview =
-    document.getElementById("cameraPreview");
-
-const cameraScreen =
-    document.getElementById("cameraScreen");
-
-const galleryScreen =
-    document.getElementById("galleryScreen");
-
-const cameraOffScreen =
-    document.getElementById("cameraOffScreen");
-
-const cameraError =
-    document.getElementById("cameraError");
-
-const cameraErrorText =
-    document.getElementById("cameraErrorText");
-
-const retryCamera =
-    document.getElementById("retryCamera");
-
-const cameraPowerButton =
-    document.getElementById("cameraPowerButton");
-
-const cameraPowerIcon =
-    document.getElementById("cameraPowerIcon");
-
-const cameraPowerText =
-    document.getElementById("cameraPowerText");
-
-const switchCamera =
-    document.getElementById("switchCamera");
-
-const captureButton =
-    document.getElementById("captureButton");
-
-const galleryButton =
-    document.getElementById("galleryButton");
-
-const backToCamera =
-    document.getElementById("backToCamera");
-
-const zoomSlider =
-    document.getElementById("zoomSlider");
-
-const zoomIndicator =
-    document.getElementById("zoomIndicator");
-
-const maxZoomText =
-    document.getElementById("maxZoomText");
-
-const photoCanvas =
-    document.getElementById("photoCanvas");
-
-const galleryGrid =
-    document.getElementById("galleryGrid");
-
-const emptyGallery =
-    document.getElementById("emptyGallery");
-
-const photoCount =
-    document.getElementById("photoCount");
-
-const photoViewer =
-    document.getElementById("photoViewer");
-
-const viewerImage =
-    document.getElementById("viewerImage");
-
-const closeViewer =
-    document.getElementById("closeViewer");
-
-const deletePhotoButton =
-    document.getElementById("deletePhoto");
-
-
-/* =========================================
-   상태
-========================================= */
+/* =========================================================
+   카메라 변수
+========================================================= */
 
 let cameraStream = null;
 
@@ -94,73 +51,86 @@ let cameraEnabled = false;
 
 let currentFacingMode = "environment";
 
-let currentZoom = 1;
+let cameraTrack = null;
 
-let minimumZoom = 1;
+let hardwareZoomSupported = false;
 
-let maximumZoom = 5;
+let currentCameraZoom = 1;
 
-let cameraSupportsHardwareZoom = false;
+
+/* =========================================================
+   갤러리 변수
+========================================================= */
+
+let db = null;
 
 let currentPhotoId = null;
 
-let database = null;
+let currentPhotoURL = null;
 
 
-/* =========================================
-   IndexedDB 열기
-========================================= */
+/* =========================================================
+   갤러리 사진 확대 변수
+========================================================= */
+
+let viewerZoom = 1;
+
+const MIN_VIEWER_ZOOM = 1;
+const MAX_VIEWER_ZOOM = 5;
+
+let viewerPositionX = 0;
+let viewerPositionY = 0;
+
+let isDragging = false;
+
+let dragStartX = 0;
+let dragStartY = 0;
+
+let dragOriginX = 0;
+let dragOriginY = 0;
+
+
+/* 핀치 줌 */
+
+let pinchStartDistance = 0;
+let pinchStartZoom = 1;
+
+
+/* =========================================================
+   IndexedDB
+========================================================= */
 
 function openDatabase() {
 
     return new Promise((resolve, reject) => {
 
-        const request =
-            indexedDB.open(
-                "StandaloneCameraDatabase",
-                1
-            );
-
+        const request = indexedDB.open(
+            "StandaloneCameraDatabase",
+            1
+        );
 
         request.onupgradeneeded = function(event) {
 
-            const db =
-                event.target.result;
+            const database = event.target.result;
 
+            if (!database.objectStoreNames.contains("photos")) {
 
-            if (
-                !db.objectStoreNames.contains("photos")
-            ) {
-
-                const store =
-                    db.createObjectStore(
-                        "photos",
-                        {
-                            keyPath: "id",
-                            autoIncrement: true
-                        }
-                    );
-
-
-                store.createIndex(
-                    "createdAt",
-                    "createdAt",
+                database.createObjectStore(
+                    "photos",
                     {
-                        unique: false
+                        keyPath: "id",
+                        autoIncrement: true
                     }
                 );
             }
         };
 
-
         request.onsuccess = function(event) {
 
-            database =
-                event.target.result;
+            db = event.target.result;
 
-            resolve(database);
+            resolve(db);
         };
-
 
         request.onerror = function() {
 
@@ -170,43 +140,31 @@ function openDatabase() {
 }
 
 
-/* =========================================
+/* =========================================================
    사진 저장
-========================================= */
+========================================================= */
 
 function savePhoto(blob) {
 
     return new Promise((resolve, reject) => {
 
-        const transaction =
-            database.transaction(
-                ["photos"],
-                "readwrite"
-            );
+        const transaction = db.transaction(
+            "photos",
+            "readwrite"
+        );
 
+        const store = transaction.objectStore("photos");
 
-        const store =
-            transaction.objectStore("photos");
-
-
-        const photo = {
-
-            image: blob,
-
-            createdAt: Date.now()
-        };
-
-
-        const request =
-            store.add(photo);
-
+        const request = store.add({
+            blob: blob,
+            date: Date.now()
+        });
 
         request.onsuccess = function() {
 
             resolve(request.result);
         };
 
-
         request.onerror = function() {
 
             reject(request.error);
@@ -215,44 +173,27 @@ function savePhoto(blob) {
 }
 
 
-/* =========================================
-   모든 사진 가져오기
-========================================= */
+/* =========================================================
+   사진 가져오기
+========================================================= */
 
 function getAllPhotos() {
 
     return new Promise((resolve, reject) => {
 
-        const transaction =
-            database.transaction(
-                ["photos"],
-                "readonly"
-            );
+        const transaction = db.transaction(
+            "photos",
+            "readonly"
+        );
 
+        const store = transaction.objectStore("photos");
 
-        const store =
-            transaction.objectStore("photos");
-
-
-        const request =
-            store.getAll();
-
+        const request = store.getAll();
 
         request.onsuccess = function() {
 
-            const photos =
-                request.result;
-
-
-            photos.sort(
-                (a, b) =>
-                    b.createdAt - a.createdAt
-            );
-
-
-            resolve(photos);
+            resolve(request.result);
         };
-
 
         request.onerror = function() {
 
@@ -262,35 +203,58 @@ function getAllPhotos() {
 }
 
 
-/* =========================================
+/* =========================================================
+   사진 하나 가져오기
+========================================================= */
+
+function getPhoto(id) {
+
+    return new Promise((resolve, reject) => {
+
+        const transaction = db.transaction(
+            "photos",
+            "readonly"
+        );
+
+        const store = transaction.objectStore("photos");
+
+        const request = store.get(id);
+
+        request.onsuccess = function() {
+
+            resolve(request.result);
+        };
+
+        request.onerror = function() {
+
+            reject(request.error);
+        };
+    });
+}
+
+
+/* =========================================================
    사진 삭제
-========================================= */
+========================================================= */
 
 function deletePhotoFromDatabase(id) {
 
     return new Promise((resolve, reject) => {
 
-        const transaction =
-            database.transaction(
-                ["photos"],
-                "readwrite"
-            );
+        const transaction = db.transaction(
+            "photos",
+            "readwrite"
+        );
 
+        const store = transaction.objectStore("photos");
 
-        const store =
-            transaction.objectStore("photos");
-
-
-        const request =
-            store.delete(id);
-
+        const request = store.delete(id);
 
         request.onsuccess = function() {
 
             resolve();
         };
 
-
         request.onerror = function() {
 
             reject(request.error);
@@ -299,37 +263,35 @@ function deletePhotoFromDatabase(id) {
 }
 
 
-/* =========================================
+/* =========================================================
    카메라 시작
-========================================= */
+========================================================= */
 
 async function startCamera() {
 
-    cameraError.classList.add("hidden");
+    hideCameraError();
 
-    cameraOffScreen.classList.add("hidden");
+    stopCamera();
+
+    if (
+        !navigator.mediaDevices ||
+        !navigator.mediaDevices.getUserMedia
+    ) {
+
+        showCameraError(
+            "이 브라우저에서는 카메라를 사용할 수 없습니다."
+        );
+
+        return;
+    }
+
 
     try {
-
-        stopCamera(false);
-
-
-        if (
-            !navigator.mediaDevices ||
-            !navigator.mediaDevices.getUserMedia
-        ) {
-
-            throw new Error(
-                "이 브라우저에서는 카메라 기능을 지원하지 않습니다."
-            );
-        }
-
 
         cameraStream =
             await navigator.mediaDevices.getUserMedia({
 
                 video: {
-
                     facingMode: {
                         ideal: currentFacingMode
                     },
@@ -347,666 +309,422 @@ async function startCamera() {
             });
 
 
-        cameraPreview.srcObject =
-            cameraStream;
+        cameraPreview.srcObject = cameraStream;
 
-
-        await cameraPreview.play();
+        cameraTrack =
+            cameraStream.getVideoTracks()[0];
 
 
         cameraEnabled = true;
 
+        cameraOffScreen.classList.add("hidden");
 
-        /*
-            실제 카메라가 지원하는 줌 범위 확인
-        */
+        await cameraPreview.play();
 
-        const tracks =
-            cameraStream.getVideoTracks();
-
-
-        if (tracks.length > 0) {
-
-            const track =
-                tracks[0];
-
-
-            const capabilities =
-                typeof track.getCapabilities === "function"
-                    ? track.getCapabilities()
-                    : {};
-
-
-            if (
-                typeof capabilities.zoom === "object" &&
-                typeof capabilities.zoom.min === "number" &&
-                typeof capabilities.zoom.max === "number"
-            ) {
-
-                minimumZoom =
-                    Math.max(
-                        1,
-                        capabilities.zoom.min
-                    );
-
-                maximumZoom =
-                    Math.max(
-                        minimumZoom,
-                        capabilities.zoom.max
-                    );
-
-                cameraSupportsHardwareZoom = true;
-
-            } else {
-
-                minimumZoom = 1;
-
-                maximumZoom = 5;
-
-                cameraSupportsHardwareZoom = false;
-            }
-        }
-
-
-        /*
-            슬라이더 범위 설정
-        */
-
-        zoomSlider.min =
-            String(minimumZoom);
-
-        zoomSlider.max =
-            String(maximumZoom);
-
-        zoomSlider.step = "0.1";
-
-
-        /*
-            현재 줌값이 범위를 벗어나면 조정
-        */
-
-        currentZoom =
-            clamp(
-                currentZoom,
-                minimumZoom,
-                maximumZoom
-            );
-
-
-        zoomSlider.value =
-            String(currentZoom);
-
-
-        maxZoomText.textContent =
-            formatZoom(maximumZoom);
-
-
-        updateZoomDisplay();
-
-
-        updateCameraControls();
-
+        setupHardwareZoom();
 
     } catch (error) {
 
-        console.error(
-            "카메라 시작 오류:",
-            error
-        );
-
+        console.error(error);
 
         cameraEnabled = false;
 
-        cameraPreview.srcObject = null;
+        cameraOffScreen.classList.remove("hidden");
 
-
-        cameraErrorText.textContent =
-            getCameraErrorMessage(error);
-
-
-        cameraError.classList.remove(
-            "hidden"
+        showCameraError(
+            "카메라를 사용할 수 없습니다.\n카메라 권한을 확인해주세요."
         );
-
-
-        updateCameraControls();
     }
 }
 
 
-/* =========================================
+/* =========================================================
    카메라 종료
-========================================= */
+========================================================= */
 
-function stopCamera(showOffScreen = true) {
+function stopCamera() {
 
     if (cameraStream) {
 
         cameraStream
             .getTracks()
-            .forEach(track => {
-                track.stop();
-            });
+            .forEach(track => track.stop());
+
+        cameraStream = null;
     }
 
-
-    cameraStream = null;
+    cameraTrack = null;
 
     cameraPreview.srcObject = null;
 
     cameraEnabled = false;
 
+    hardwareZoomSupported = false;
 
-    if (showOffScreen) {
+    currentCameraZoom = 1;
 
-        cameraOffScreen.classList.remove(
-            "hidden"
-        );
-    }
+    zoomSlider.value = 1;
+
+    zoomIndicator.textContent = "1.0×";
+
+    cameraPreview.style.transform = "scale(1)";
 }
 
 
-/* =========================================
-   카메라 켜기 / 끄기
-========================================= */
+/* =========================================================
+   카메라 ON/OFF
+========================================================= */
 
 async function toggleCamera() {
 
     if (cameraEnabled) {
 
-        stopCamera(true);
+        stopCamera();
+
+        cameraOffScreen.classList.remove("hidden");
+
+        cameraPowerButton.textContent = "⏻";
 
     } else {
 
+        cameraOffScreen.classList.add("hidden");
+
         await startCamera();
+
+        if (cameraEnabled) {
+
+            cameraPowerButton.textContent = "⏻";
+        }
     }
-
-
-    updateCameraControls();
 }
 
 
-/* =========================================
+/* =========================================================
    카메라 전환
-========================================= */
+========================================================= */
 
-async function changeCamera() {
+async function switchCamera() {
 
     if (!cameraEnabled) {
         return;
     }
-
 
     currentFacingMode =
         currentFacingMode === "environment"
             ? "user"
             : "environment";
 
-
     await startCamera();
 }
 
 
-/* =========================================
-   컨트롤 상태 업데이트
-========================================= */
+/* =========================================================
+   카메라 오류
+========================================================= */
 
-function updateCameraControls() {
+function showCameraError(message) {
 
-    if (cameraEnabled) {
+    cameraErrorText.textContent = message;
 
-        cameraPowerButton.classList.add(
-            "camera-on"
-        );
+    cameraError.classList.remove("hidden");
+}
 
-        cameraPowerButton.classList.remove(
-            "camera-off"
-        );
+function hideCameraError() {
 
-
-        cameraPowerIcon.textContent = "●";
-
-        cameraPowerText.textContent = "끄기";
-
-
-        captureButton.classList.remove(
-            "disabled"
-        );
-
-
-        switchCamera.classList.remove(
-            "disabled"
-        );
-
-    } else {
-
-        cameraPowerButton.classList.remove(
-            "camera-on"
-        );
-
-        cameraPowerButton.classList.add(
-            "camera-off"
-        );
-
-
-        cameraPowerIcon.textContent = "○";
-
-        cameraPowerText.textContent = "켜기";
-
-
-        captureButton.classList.add(
-            "disabled"
-        );
-
-        switchCamera.classList.add(
-            "disabled"
-        );
-    }
+    cameraError.classList.add("hidden");
 }
 
 
-/* =========================================
-   줌 숫자 표시
-========================================= */
+/* =========================================================
+   하드웨어 줌 확인
+========================================================= */
 
-function formatZoom(value) {
+function setupHardwareZoom() {
 
-    const rounded =
-        Math.round(
-            Number(value) * 10
-        ) / 10;
+    hardwareZoomSupported = false;
 
+    currentCameraZoom = 1;
 
-    if (
-        Number.isInteger(rounded)
-    ) {
+    zoomSlider.min = 1;
+    zoomSlider.max = 5;
+    zoomSlider.step = 0.1;
+    zoomSlider.value = 1;
 
-        return `${rounded}×`;
-    }
-
-
-    return `${rounded.toFixed(1)}×`;
-}
-
-
-/* =========================================
-   숫자 제한
-========================================= */
-
-function clamp(value, min, max) {
-
-    return Math.min(
-        Math.max(value, min),
-        max
-    );
-}
-
-
-/* =========================================
-   줌 적용
-========================================= */
-
-async function applyZoom(value) {
-
-    if (!cameraEnabled) {
+    if (!cameraTrack) {
         return;
     }
 
 
-    const safeValue =
-        clamp(
-            Number(value),
-            minimumZoom,
-            maximumZoom
-        );
-
-
-    currentZoom = safeValue;
-
-
-    zoomSlider.value =
-        String(currentZoom);
-
-
-    updateZoomDisplay();
-
-
-    /*
-        실제 카메라 줌 지원
-    */
-
     if (
-        cameraSupportsHardwareZoom &&
-        cameraStream
+        typeof cameraTrack.getCapabilities === "function"
     ) {
 
-        const track =
-            cameraStream.getVideoTracks()[0];
+        const capabilities =
+            cameraTrack.getCapabilities();
 
+        if (
+            capabilities.zoom &&
+            capabilities.zoom.min !== undefined &&
+            capabilities.zoom.max !== undefined
+        ) {
 
-        if (track) {
+            hardwareZoomSupported = true;
 
-            try {
+            zoomSlider.min =
+                capabilities.zoom.min;
 
-                await track.applyConstraints({
-
-                    advanced: [
-                        {
-                            zoom: currentZoom
-                        }
-                    ]
-
-                });
-
-                /*
-                    실제 하드웨어 줌을 사용했으므로
-                    CSS 확대는 하지 않는다.
-                */
-
-                cameraPreview.style.transform =
-                    "scale(1)";
-
-                return;
-
-            } catch (error) {
-
-                console.warn(
-                    "하드웨어 줌을 사용할 수 없어 화면 줌으로 전환합니다.",
-                    error
+            zoomSlider.max =
+                Math.min(
+                    capabilities.zoom.max,
+                    10
                 );
 
-                cameraSupportsHardwareZoom =
-                    false;
-            }
+            zoomSlider.step =
+                capabilities.zoom.step || 0.1;
+
+            zoomSlider.value =
+                capabilities.zoom.min;
+
+            currentCameraZoom =
+                Number(zoomSlider.value);
+
+            updateZoomText();
+        }
+    }
+}
+
+
+/* =========================================================
+   카메라 줌 변경
+========================================================= */
+
+async function changeCameraZoom(value) {
+
+    currentCameraZoom = Number(value);
+
+    updateZoomText();
+
+
+    if (
+        hardwareZoomSupported &&
+        cameraTrack
+    ) {
+
+        try {
+
+            await cameraTrack.applyConstraints({
+
+                advanced: [
+                    {
+                        zoom: currentCameraZoom
+                    }
+                ]
+            });
+
+            cameraPreview.style.transform =
+                "scale(1)";
+
+            return;
+
+        } catch (error) {
+
+            console.log(
+                "하드웨어 줌 실패:",
+                error
+            );
         }
     }
 
 
     /*
-        하드웨어 줌을 지원하지 않는 경우
-        화면 확대 방식
+       하드웨어 줌을 지원하지 않는 경우
+       화면 확대 방식으로 대체
     */
 
     cameraPreview.style.transform =
-        `scale(${currentZoom})`;
+        `scale(${currentCameraZoom})`;
 }
 
 
-/* =========================================
-   줌 UI 업데이트
-========================================= */
+/* =========================================================
+   줌 표시
+========================================================= */
 
-function updateZoomDisplay() {
+function updateZoomText() {
 
     zoomIndicator.textContent =
-        formatZoom(currentZoom);
+        `${currentCameraZoom.toFixed(1)}×`;
 }
 
 
-/* =========================================
+/* =========================================================
    사진 촬영
-========================================= */
+========================================================= */
 
 async function capturePhoto() {
 
-    if (!cameraEnabled) {
+    if (
+        !cameraEnabled ||
+        !cameraStream ||
+        !cameraPreview.videoWidth
+    ) {
+
         return;
     }
 
 
-    if (!cameraPreview.videoWidth) {
-        return;
-    }
+    const canvas =
+        document.createElement("canvas");
 
-
-    const sourceWidth =
+    const videoWidth =
         cameraPreview.videoWidth;
 
-    const sourceHeight =
+    const videoHeight =
         cameraPreview.videoHeight;
 
 
+    let sourceX = 0;
+    let sourceY = 0;
+    let sourceWidth = videoWidth;
+    let sourceHeight = videoHeight;
+
+
     /*
-        하드웨어 줌을 사용하지 않는 경우
-        확대된 영역을 직접 잘라서 저장한다.
+       실제 하드웨어 줌이 아니라
+       화면 확대 방식으로 사용 중이라면
+       사진도 확대된 영역을 저장
     */
 
-    let cropWidth =
-        sourceWidth;
+    if (!hardwareZoomSupported) {
 
-    let cropHeight =
-        sourceHeight;
+        const cropRatio =
+            1 / currentCameraZoom;
 
+        sourceWidth =
+            videoWidth * cropRatio;
 
-    if (!cameraSupportsHardwareZoom) {
+        sourceHeight =
+            videoHeight * cropRatio;
 
-        cropWidth =
-            sourceWidth / currentZoom;
+        sourceX =
+            (videoWidth - sourceWidth) / 2;
 
-        cropHeight =
-            sourceHeight / currentZoom;
+        sourceY =
+            (videoHeight - sourceHeight) / 2;
     }
 
 
-    cropWidth =
-        Math.max(
-            1,
-            Math.round(cropWidth)
-        );
-
-
-    cropHeight =
-        Math.max(
-            1,
-            Math.round(cropHeight)
-        );
-
-
-    const cropX =
-        Math.max(
-            0,
-            Math.round(
-                (sourceWidth - cropWidth) / 2
-            )
-        );
-
-
-    const cropY =
-        Math.max(
-            0,
-            Math.round(
-                (sourceHeight - cropHeight) / 2
-            )
-        );
-
-
-    photoCanvas.width =
-        cropWidth;
-
-    photoCanvas.height =
-        cropHeight;
+    canvas.width = sourceWidth;
+    canvas.height = sourceHeight;
 
 
     const context =
-        photoCanvas.getContext("2d");
-
-
-    context.clearRect(
-        0,
-        0,
-        cropWidth,
-        cropHeight
-    );
+        canvas.getContext("2d");
 
 
     /*
-        전면 카메라
-        좌우 반전
+       전면 카메라 사진은
+       일반적인 셀카처럼 좌우 반전
     */
 
     if (currentFacingMode === "user") {
 
-        context.save();
-
         context.translate(
-            cropWidth,
+            canvas.width,
             0
         );
 
-        context.scale(
-            -1,
-            1
-        );
-
-
-        context.drawImage(
-
-            cameraPreview,
-
-            cropX,
-            cropY,
-            cropWidth,
-            cropHeight,
-
-            0,
-            0,
-            cropWidth,
-            cropHeight
-
-        );
-
-
-        context.restore();
-
-    } else {
-
-        context.drawImage(
-
-            cameraPreview,
-
-            cropX,
-            cropY,
-            cropWidth,
-            cropHeight,
-
-            0,
-            0,
-            cropWidth,
-            cropHeight
-
-        );
+        context.scale(-1, 1);
     }
 
 
-    /*
-        JPEG로 변환
-    */
+    context.drawImage(
+        cameraPreview,
+        sourceX,
+        sourceY,
+        sourceWidth,
+        sourceHeight,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
 
-    photoCanvas.toBlob(
 
+    canvas.toBlob(
         async function(blob) {
 
             if (!blob) {
                 return;
             }
 
-
             try {
 
                 await savePhoto(blob);
 
-
                 /*
-                    촬영 효과
+                   촬영 후 작은 시각적 효과
                 */
 
-                cameraPreview.style.opacity =
-                    "0.25";
-
+                cameraPreview.style.opacity = "0.5";
 
                 setTimeout(() => {
 
-                    cameraPreview.style.opacity =
-                        "1";
+                    cameraPreview.style.opacity = "1";
 
                 }, 100);
-
 
             } catch (error) {
 
                 console.error(
-                    "사진 저장 오류:",
+                    "사진 저장 실패:",
                     error
                 );
             }
 
         },
-
         "image/jpeg",
-
-        0.92
+        0.95
     );
 }
 
 
-/* =========================================
+/* =========================================================
    갤러리 열기
-========================================= */
+========================================================= */
 
 async function openGallery() {
 
-    stopCamera(false);
+    cameraScreen.classList.remove("active");
 
-    cameraScreen.classList.remove(
-        "active"
-    );
+    galleryScreen.classList.add("active");
 
-    galleryScreen.classList.add(
-        "active"
-    );
-
-
-    await renderGallery();
+    await loadGallery();
 }
 
 
-/* =========================================
+/* =========================================================
    카메라로 돌아가기
-========================================= */
+========================================================= */
 
-async function returnToCamera() {
+function returnToCamera() {
 
-    closePhotoViewer();
+    galleryScreen.classList.remove("active");
 
-
-    galleryScreen.classList.remove(
-        "active"
-    );
-
-    cameraScreen.classList.add(
-        "active"
-    );
-
-
-    await startCamera();
+    cameraScreen.classList.add("active");
 }
 
 
-/* =========================================
-   갤러리 표시
-========================================= */
+/* =========================================================
+   갤러리 불러오기
+========================================================= */
 
-async function renderGallery() {
+async function loadGallery() {
 
     galleryGrid.innerHTML = "";
 
-
     const photos =
         await getAllPhotos();
-
-
-    photoCount.textContent =
-        `${photos.length}장`;
 
 
     if (photos.length === 0) {
@@ -1019,8 +737,15 @@ async function renderGallery() {
     }
 
 
-    emptyGallery.classList.add(
-        "hidden"
+    emptyGallery.classList.add("hidden");
+
+
+    /*
+       최신 사진이 먼저 나오도록
+    */
+
+    photos.sort(
+        (a, b) => b.date - a.date
     );
 
 
@@ -1029,25 +754,16 @@ async function renderGallery() {
         const item =
             document.createElement("div");
 
-
-        item.className =
-            "gallery-item";
+        item.className = "gallery-item";
 
 
         const image =
             document.createElement("img");
 
-
         const url =
-            URL.createObjectURL(
-                photo.image
-            );
-
+            URL.createObjectURL(photo.blob);
 
         image.src = url;
-
-        image.alt = "촬영한 사진";
-
 
         image.onload = function() {
 
@@ -1060,7 +776,7 @@ async function renderGallery() {
 
         item.addEventListener(
             "click",
-            () => openPhotoViewer(photo)
+            () => openPhotoViewer(photo.id)
         );
 
 
@@ -1069,24 +785,42 @@ async function renderGallery() {
 }
 
 
-/* =========================================
-   사진 크게 보기
-========================================= */
+/* =========================================================
+   사진 뷰어 열기
+========================================================= */
 
-function openPhotoViewer(photo) {
+async function openPhotoViewer(id) {
 
-    currentPhotoId =
-        photo.id;
+    const photo =
+        await getPhoto(id);
+
+    if (!photo) {
+        return;
+    }
 
 
-    const url =
+    currentPhotoId = id;
+
+
+    if (currentPhotoURL) {
+
+        URL.revokeObjectURL(
+            currentPhotoURL
+        );
+    }
+
+
+    currentPhotoURL =
         URL.createObjectURL(
-            photo.image
+            photo.blob
         );
 
 
     viewerImage.src =
-        url;
+        currentPhotoURL;
+
+
+    resetViewerZoom();
 
 
     photoViewer.classList.remove(
@@ -1095,9 +829,9 @@ function openPhotoViewer(photo) {
 }
 
 
-/* =========================================
+/* =========================================================
    사진 뷰어 닫기
-========================================= */
+========================================================= */
 
 function closePhotoViewer() {
 
@@ -1106,53 +840,191 @@ function closePhotoViewer() {
     );
 
 
+    if (currentPhotoURL) {
+
+        URL.revokeObjectURL(
+            currentPhotoURL
+        );
+
+        currentPhotoURL = null;
+    }
+
+
     viewerImage.src = "";
 
     currentPhotoId = null;
+
+    resetViewerZoom();
 }
 
 
-/* =========================================
-   사진 삭제
-========================================= */
+/* =========================================================
+   사진 확대 적용
+========================================================= */
 
-async function deleteCurrentPhoto() {
+function updateViewerTransform() {
 
-    if (currentPhotoId === null) {
-        return;
+    viewerImage.style.transform =
+        `translate(${viewerPositionX}px, ${viewerPositionY}px) scale(${viewerZoom})`;
+
+    viewerZoomText.textContent =
+        `${viewerZoom.toFixed(1)}×`;
+}
+
+
+/* =========================================================
+   사진 확대
+========================================================= */
+
+function setViewerZoom(value) {
+
+    viewerZoom =
+        Math.max(
+            MIN_VIEWER_ZOOM,
+            Math.min(
+                MAX_VIEWER_ZOOM,
+                value
+            )
+        );
+
+
+    /*
+       원본 크기에서는 위치 초기화
+    */
+
+    if (viewerZoom === 1) {
+
+        viewerPositionX = 0;
+        viewerPositionY = 0;
     }
 
 
-    const id =
-        currentPhotoId;
+    updateViewerTransform();
+}
 
 
-    try {
+/* =========================================================
+   줌 + 버튼
+========================================================= */
 
-        await deletePhotoFromDatabase(id);
+function zoomViewerIn() {
 
-        closePhotoViewer();
+    setViewerZoom(
+        viewerZoom + 0.5
+    );
+}
 
-        await renderGallery();
 
-    } catch (error) {
+/* =========================================================
+   줌 - 버튼
+========================================================= */
 
-        console.error(
-            "사진 삭제 오류:",
-            error
+function zoomViewerOut() {
+
+    setViewerZoom(
+        viewerZoom - 0.5
+    );
+}
+
+
+/* =========================================================
+   원본 크기
+========================================================= */
+
+function resetViewerZoom() {
+
+    viewerZoom = 1;
+
+    viewerPositionX = 0;
+
+    viewerPositionY = 0;
+
+    updateViewerTransform();
+}
+
+
+/* =========================================================
+   사진 드래그
+========================================================= */
+
+photoZoomArea.addEventListener(
+    "pointerdown",
+    function(event) {
+
+        /*
+           줌이 1배일 때는 이동하지 않음
+        */
+
+        if (viewerZoom <= 1) {
+            return;
+        }
+
+
+        isDragging = true;
+
+        dragStartX = event.clientX;
+        dragStartY = event.clientY;
+
+        dragOriginX = viewerPositionX;
+        dragOriginY = viewerPositionY;
+
+
+        photoZoomArea.setPointerCapture(
+            event.pointerId
         );
     }
-}
+);
 
 
-/* =========================================
+photoZoomArea.addEventListener(
+    "pointermove",
+    function(event) {
+
+        if (!isDragging) {
+            return;
+        }
+
+
+        const dx =
+            event.clientX - dragStartX;
+
+        const dy =
+            event.clientY - dragStartY;
+
+
+        viewerPositionX =
+            dragOriginX + dx;
+
+        viewerPositionY =
+            dragOriginY + dy;
+
+
+        updateViewerTransform();
+    }
+);
+
+
+photoZoomArea.addEventListener(
+    "pointerup",
+    function() {
+
+        isDragging = false;
+    }
+);
+
+
+photoZoomArea.addEventListener(
+    "pointercancel",
+    function() {
+
+        isDragging = false;
+    }
+);
+
+
+/* =========================================================
    핀치 줌
-========================================= */
-
-let pinchStartDistance = null;
-
-let pinchStartZoom = 1;
-
+========================================================= */
 
 function getTouchDistance(touch1, touch2) {
 
@@ -1162,52 +1034,39 @@ function getTouchDistance(touch1, touch2) {
     const dy =
         touch1.clientY - touch2.clientY;
 
-
     return Math.sqrt(
-        dx * dx +
-        dy * dy
+        dx * dx + dy * dy
     );
 }
 
 
-cameraPreview.addEventListener(
+photoZoomArea.addEventListener(
     "touchstart",
     function(event) {
 
-        if (
-            event.touches.length !== 2 ||
-            !cameraEnabled
-        ) {
-            return;
+        if (event.touches.length === 2) {
+
+            pinchStartDistance =
+                getTouchDistance(
+                    event.touches[0],
+                    event.touches[1]
+                );
+
+            pinchStartZoom =
+                viewerZoom;
         }
-
-
-        pinchStartDistance =
-            getTouchDistance(
-                event.touches[0],
-                event.touches[1]
-            );
-
-
-        pinchStartZoom =
-            currentZoom;
-
     },
     {
-        passive: true
+        passive: false
     }
 );
 
 
-cameraPreview.addEventListener(
+photoZoomArea.addEventListener(
     "touchmove",
     function(event) {
 
-        if (
-            event.touches.length !== 2 ||
-            pinchStartDistance === null ||
-            !cameraEnabled
-        ) {
+        if (event.touches.length !== 2) {
             return;
         }
 
@@ -1215,7 +1074,7 @@ cameraPreview.addEventListener(
         event.preventDefault();
 
 
-        const distance =
+        const currentDistance =
             getTouchDistance(
                 event.touches[0],
                 event.touches[1]
@@ -1228,16 +1087,13 @@ cameraPreview.addEventListener(
 
 
         const ratio =
-            distance /
+            currentDistance /
             pinchStartDistance;
 
 
-        const newZoom =
-            pinchStartZoom * ratio;
-
-
-        applyZoom(newZoom);
-
+        setViewerZoom(
+            pinchStartZoom * ratio
+        );
     },
     {
         passive: false
@@ -1245,79 +1101,64 @@ cameraPreview.addEventListener(
 );
 
 
-cameraPreview.addEventListener(
+photoZoomArea.addEventListener(
     "touchend",
     function(event) {
 
-        if (
-            event.touches.length < 2
-        ) {
+        if (event.touches.length < 2) {
 
-            pinchStartDistance =
-                null;
+            pinchStartDistance = 0;
         }
-    },
-    {
-        passive: true
     }
 );
 
 
-/* =========================================
-   오류 메시지
-========================================= */
+/* =========================================================
+   사진 삭제
+========================================================= */
 
-function getCameraErrorMessage(error) {
+async function deleteCurrentPhoto() {
 
-    if (!error) {
-
-        return "카메라를 사용할 수 없습니다.";
+    if (currentPhotoId === null) {
+        return;
     }
 
 
-    if (
-        error.name ===
-        "NotAllowedError"
-    ) {
+    const confirmed =
+        confirm(
+            "이 사진을 삭제할까요?"
+        );
 
-        return "카메라 권한이 필요합니다. 브라우저에서 카메라 사용을 허용해 주세요.";
+
+    if (!confirmed) {
+        return;
     }
 
 
-    if (
-        error.name ===
-        "NotFoundError"
-    ) {
+    try {
 
-        return "사용할 수 있는 카메라를 찾을 수 없습니다.";
+        await deletePhotoFromDatabase(
+            currentPhotoId
+        );
+
+
+        closePhotoViewer();
+
+        await loadGallery();
+
+    } catch (error) {
+
+        console.error(
+            "사진 삭제 실패:",
+            error
+        );
     }
-
-
-    if (
-        error.name ===
-        "NotReadableError"
-    ) {
-
-        return "카메라가 다른 앱에서 사용 중일 수 있습니다.";
-    }
-
-
-    if (
-        error.name ===
-        "SecurityError"
-    ) {
-
-        return "보안상의 이유로 카메라를 사용할 수 없습니다.";
-    }
-
-
-    return "카메라를 시작하지 못했습니다.";
 }
 
 
-/* =========================================
-   이벤트
-========================================= */
+/* =========================================================
+   이벤트 연결
+========================================================= */
 
 cameraPowerButton.addEventListener(
     "click",
@@ -1325,9 +1166,9 @@ cameraPowerButton.addEventListener(
 );
 
 
-switchCamera.addEventListener(
+switchCameraButton.addEventListener(
     "click",
-    changeCamera
+    switchCamera
 );
 
 
@@ -1343,19 +1184,30 @@ galleryButton.addEventListener(
 );
 
 
-backToCamera.addEventListener(
+galleryBackButton.addEventListener(
     "click",
     returnToCamera
 );
 
 
-retryCamera.addEventListener(
+retryCameraButton.addEventListener(
     "click",
     startCamera
 );
 
 
-closeViewer.addEventListener(
+zoomSlider.addEventListener(
+    "input",
+    function() {
+
+        changeCameraZoom(
+            this.value
+        );
+    }
+);
+
+
+viewerCloseButton.addEventListener(
     "click",
     closePhotoViewer
 );
@@ -1367,24 +1219,27 @@ deletePhotoButton.addEventListener(
 );
 
 
-/*
-    줌 슬라이더
-*/
-
-zoomSlider.addEventListener(
-    "input",
-    function() {
-
-        applyZoom(
-            Number(this.value)
-        );
-    }
+zoomInButton.addEventListener(
+    "click",
+    zoomViewerIn
 );
 
 
-/* =========================================
-   초기화
-========================================= */
+zoomOutButton.addEventListener(
+    "click",
+    zoomViewerOut
+);
+
+
+resetZoomButton.addEventListener(
+    "click",
+    resetViewerZoom
+);
+
+
+/* =========================================================
+   화면 초기화
+========================================================= */
 
 async function initializeApp() {
 
@@ -1397,25 +1252,15 @@ async function initializeApp() {
     } catch (error) {
 
         console.error(
-            "앱 초기화 오류:",
+            "앱 초기화 실패:",
             error
+        );
+
+        showCameraError(
+            "앱을 초기화할 수 없습니다."
         );
     }
 }
 
 
 initializeApp();
-
-
-/* =========================================
-   페이지를 떠날 때 카메라 종료
-========================================= */
-
-window.addEventListener(
-    "pagehide",
-    function() {
-
-        stopCamera(false);
-    }
-);
-```
