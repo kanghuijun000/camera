@@ -1,7 +1,10 @@
+```css
 * {
     box-sizing: border-box;
+
     margin: 0;
     padding: 0;
+
     -webkit-tap-highlight-color: transparent;
 }
 
@@ -9,24 +12,47 @@ html,
 body {
     width: 100%;
     height: 100%;
+
     overflow: hidden;
+
     background: #000;
-    font-family: Arial, sans-serif;
+
+    font-family:
+        Arial,
+        "Noto Sans KR",
+        sans-serif;
+}
+
+body {
+    touch-action: manipulation;
 }
 
 button {
     border: none;
     outline: none;
+
     cursor: pointer;
+
     font-family: inherit;
+
+    -webkit-tap-highlight-color: transparent;
 }
+
+
+/* =====================================
+   화면
+===================================== */
 
 .screen {
     position: fixed;
+
     inset: 0;
+
     width: 100%;
     height: 100%;
+
     display: none;
+
     background: #000;
 }
 
@@ -35,53 +61,190 @@ button {
 }
 
 
-/* =========================
-   카메라
-========================= */
+/* =====================================
+   카메라 미리보기
+===================================== */
 
 #cameraPreview {
     position: absolute;
+
     inset: 0;
+
     width: 100%;
     height: 100%;
+
     object-fit: cover;
+
     background: #111;
+
+    transform-origin: center center;
+
+    transition:
+        transform 0.12s ease,
+        opacity 0.12s ease;
 }
+
+
+/* =====================================
+   카메라 꺼짐
+===================================== */
+
+.camera-off-screen {
+    position: absolute;
+
+    inset: 0;
+
+    z-index: 5;
+
+    background: #050505;
+
+    color: #777;
+
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: center;
+    justify-content: center;
+
+    text-align: center;
+}
+
+.camera-off-icon {
+    width: 80px;
+    height: 80px;
+
+    border: 3px solid #555;
+
+    border-radius: 50%;
+
+    display: flex;
+
+    align-items: center;
+    justify-content: center;
+
+    font-size: 36px;
+
+    margin-bottom: 20px;
+
+    opacity: 0.7;
+}
+
+.camera-off-screen p {
+    font-size: 15px;
+}
+
+
+/* =====================================
+   오류
+===================================== */
+
+.camera-error {
+    position: absolute;
+
+    inset: 0;
+
+    z-index: 40;
+
+    background: #111;
+
+    color: white;
+
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: center;
+    justify-content: center;
+
+    text-align: center;
+
+    padding: 30px;
+}
+
+.camera-error p {
+    margin-bottom: 20px;
+
+    font-size: 16px;
+}
+
+.camera-error button {
+    padding: 12px 24px;
+
+    border-radius: 12px;
+
+    background: white;
+
+    color: #111;
+
+    font-size: 15px;
+}
+
+
+/* =====================================
+   숨김
+===================================== */
+
+.hidden {
+    display: none !important;
+}
+
+
+/* =====================================
+   상단
+===================================== */
 
 .top-bar {
     position: absolute;
+
     top: 0;
     left: 0;
     right: 0;
+
     height: 100px;
-    padding: 25px 20px;
+
+    padding: 22px 20px;
+
     display: flex;
+
     align-items: center;
     justify-content: flex-end;
+
     z-index: 10;
-    background: linear-gradient(
-        to bottom,
-        rgba(0, 0, 0, 0.65),
-        transparent
-    );
+
+    background:
+        linear-gradient(
+            to bottom,
+            rgba(0, 0, 0, 0.7),
+            transparent
+        );
 }
 
 .icon-button {
     width: 62px;
     height: 62px;
+
     border-radius: 50%;
-    background: rgba(0, 0, 0, 0.45);
+
+    background: rgba(0, 0, 0, 0.5);
+
     color: white;
+
     display: flex;
+
     flex-direction: column;
+
     align-items: center;
     justify-content: center;
+
     gap: 2px;
+
     backdrop-filter: blur(8px);
 }
 
 .icon-button span {
     font-size: 25px;
+
     line-height: 25px;
 }
 
@@ -90,82 +253,221 @@ button {
 }
 
 
-.camera-controls {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
+/* =====================================
+   줌 표시
+===================================== */
 
-    height: 150px;
+.zoom-indicator {
+    position: absolute;
+
+    top: 90px;
+    left: 50%;
+
+    transform: translateX(-50%);
+
+    z-index: 12;
+
+    min-width: 55px;
+
+    padding: 7px 12px;
+
+    border-radius: 20px;
+
+    background: rgba(0, 0, 0, 0.5);
+
+    color: white;
+
+    font-size: 14px;
+
+    text-align: center;
+
+    backdrop-filter: blur(8px);
+
+    pointer-events: none;
+}
+
+
+/* =====================================
+   줌 슬라이더
+===================================== */
+
+.zoom-control {
+    position: absolute;
+
+    left: 50%;
+    bottom: 175px;
+
+    transform: translateX(-50%);
+
+    width: min(72%, 330px);
+
+    height: 48px;
+
+    z-index: 15;
 
     display: flex;
+
+    align-items: center;
+
+    gap: 10px;
+
+    padding: 0 12px;
+
+    border-radius: 24px;
+
+    background: rgba(0, 0, 0, 0.48);
+
+    backdrop-filter: blur(10px);
+
+    color: white;
+
+    transition:
+        opacity 0.2s,
+        visibility 0.2s;
+}
+
+.zoom-control span {
+    font-size: 11px;
+
+    min-width: 24px;
+
+    text-align: center;
+}
+
+#zoomSlider {
+    flex: 1;
+
+    min-width: 0;
+
+    accent-color: white;
+
+    cursor: pointer;
+}
+
+
+/* =====================================
+   하단 카메라 컨트롤
+===================================== */
+
+.camera-controls {
+    position: absolute;
+
+    left: 0;
+    right: 0;
+
+    bottom: 0;
+
+    height: 155px;
+
+    padding:
+        20px
+        20px
+        24px;
+
+    z-index: 20;
+
+    display: flex;
+
     align-items: center;
     justify-content: space-around;
 
-    padding: 20px 45px;
-
-    z-index: 10;
-
-    background: linear-gradient(
-        to top,
-        rgba(0, 0, 0, 0.8),
-        transparent
-    );
+    background:
+        linear-gradient(
+            to top,
+            rgba(0, 0, 0, 0.88),
+            transparent
+        );
 }
+
+
+/* =====================================
+   일반 버튼
+===================================== */
 
 .control-button {
     width: 60px;
     height: 60px;
+
     border-radius: 50%;
+
+    background: rgba(0, 0, 0, 0.52);
+
     color: white;
-    background: rgba(0, 0, 0, 0.45);
 
     display: flex;
+
     flex-direction: column;
+
     align-items: center;
     justify-content: center;
 
+    gap: 2px;
+
     backdrop-filter: blur(8px);
+
+    transition:
+        transform 0.1s,
+        background 0.2s;
+}
+
+.control-button:active {
+    transform: scale(0.9);
 }
 
 .control-button span {
-    font-size: 28px;
-    line-height: 28px;
+    font-size: 25px;
+
+    line-height: 27px;
 }
 
 .control-button small {
-    font-size: 10px;
-    margin-top: 2px;
-}
-
-.control-placeholder {
-    width: 60px;
-    height: 60px;
+    font-size: 9px;
 }
 
 
-/* 촬영 버튼 */
+/* 카메라 켜짐 */
+
+.control-button.camera-on {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+
+/* 카메라 꺼짐 */
+
+.control-button.camera-off {
+    background: rgba(90, 90, 90, 0.35);
+}
+
+
+/* =====================================
+   촬영 버튼
+===================================== */
 
 .capture-button {
-    width: 78px;
-    height: 78px;
+    width: 82px;
+    height: 82px;
 
     border-radius: 50%;
 
     background: white;
 
-    border: 5px solid rgba(255, 255, 255, 0.5);
+    border:
+        5px solid
+        rgba(255, 255, 255, 0.55);
 
     display: flex;
+
     align-items: center;
     justify-content: center;
 
-    transition: transform 0.1s;
+    transition:
+        transform 0.1s,
+        opacity 0.2s;
 }
 
 .capture-button span {
-    width: 62px;
-    height: 62px;
+    width: 66px;
+    height: 66px;
 
     border-radius: 50%;
 
@@ -178,82 +480,69 @@ button {
     transform: scale(0.9);
 }
 
+.capture-button.disabled {
+    opacity: 0.3;
 
-/* =========================
-   카메라 오류
-========================= */
-
-.camera-error {
-    position: absolute;
-    inset: 0;
-
-    z-index: 20;
-
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-
-    background: #111;
-    color: white;
-
-    text-align: center;
-}
-
-.camera-error p {
-    margin-bottom: 20px;
-    font-size: 16px;
-}
-
-.camera-error button {
-    padding: 12px 22px;
-    border-radius: 10px;
-    background: white;
-    color: black;
-}
-
-.hidden {
-    display: none !important;
+    pointer-events: none;
 }
 
 
-/* =========================
+/* =====================================
+   빈 공간
+===================================== */
+
+.control-placeholder {
+    width: 60px;
+    height: 60px;
+}
+
+
+/* =====================================
    갤러리
-========================= */
+===================================== */
 
 #galleryScreen {
     background: #111;
+
     color: white;
+
     overflow-y: auto;
 }
 
 .gallery-header {
     position: sticky;
+
     top: 0;
 
     height: 70px;
 
+    z-index: 5;
+
     display: flex;
+
     align-items: center;
 
     padding: 0 15px;
 
-    background: rgba(17, 17, 17, 0.96);
-
-    z-index: 5;
+    background: rgba(17, 17, 17, 0.97);
 }
 
 .gallery-header h1 {
-    font-size: 21px;
     flex: 1;
+
     text-align: center;
+
+    font-size: 21px;
 }
 
 .gallery-header span {
     width: 50px;
-    text-align: right;
-    font-size: 13px;
+
     color: #aaa;
+
+    font-size: 13px;
+
+    text-align: right;
 }
 
 .back-button {
@@ -261,21 +550,26 @@ button {
     height: 45px;
 
     background: transparent;
+
     color: white;
 
     font-size: 38px;
+
     line-height: 38px;
 }
 
 
-/* 사진 격자 */
+/* =====================================
+   사진 그리드
+===================================== */
 
 .gallery-grid {
     width: 100%;
 
     display: grid;
 
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns:
+        repeat(3, 1fr);
 
     gap: 2px;
 
@@ -283,8 +577,6 @@ button {
 }
 
 .gallery-item {
-    position: relative;
-
     width: 100%;
 
     aspect-ratio: 1 / 1;
@@ -297,16 +589,18 @@ button {
 }
 
 .gallery-item img {
+    display: block;
+
     width: 100%;
     height: 100%;
 
     object-fit: cover;
-
-    display: block;
 }
 
 
-/* 빈 갤러리 */
+/* =====================================
+   빈 갤러리
+===================================== */
 
 .empty-gallery {
     position: absolute;
@@ -317,17 +611,22 @@ button {
     bottom: 0;
 
     display: flex;
+
     flex-direction: column;
 
     align-items: center;
     justify-content: center;
 
     color: #888;
+
+    text-align: center;
 }
 
 .empty-icon {
     font-size: 60px;
+
     margin-bottom: 15px;
+
     opacity: 0.5;
 }
 
@@ -336,12 +635,13 @@ button {
 }
 
 
-/* =========================
-   사진 뷰어
-========================= */
+/* =====================================
+   사진 크게 보기
+===================================== */
 
 .photo-viewer {
     position: fixed;
+
     inset: 0;
 
     z-index: 100;
@@ -349,6 +649,7 @@ button {
     background: #000;
 
     display: flex;
+
     align-items: center;
     justify-content: center;
 }
@@ -369,15 +670,15 @@ button {
     width: 48px;
     height: 48px;
 
+    z-index: 105;
+
     border-radius: 50%;
 
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(0, 0, 0, 0.65);
 
     color: white;
 
     font-size: 34px;
-
-    z-index: 5;
 }
 
 .viewer-bottom {
@@ -385,24 +686,28 @@ button {
 
     left: 0;
     right: 0;
+
     bottom: 0;
 
     height: 100px;
+
+    z-index: 105;
 
     display: flex;
 
     align-items: center;
     justify-content: center;
 
-    background: linear-gradient(
-        to top,
-        rgba(0, 0, 0, 0.75),
-        transparent
-    );
+    background:
+        linear-gradient(
+            to top,
+            rgba(0, 0, 0, 0.8),
+            transparent
+        );
 }
 
 .delete-button {
-    padding: 12px 25px;
+    padding: 12px 27px;
 
     border-radius: 25px;
 
@@ -414,32 +719,39 @@ button {
 }
 
 
-/* 캔버스는 화면에 표시하지 않음 */
+/* =====================================
+   캔버스
+===================================== */
 
 #photoCanvas {
     display: none;
 }
 
 
-/* =========================
-   작은 화면 대응
-========================= */
+/* =====================================
+   작은 화면
+===================================== */
 
-@media (max-height: 600px) {
+@media (max-height: 650px) {
 
     .camera-controls {
-        height: 120px;
-        padding-bottom: 10px;
+        height: 130px;
+
+        padding-bottom: 12px;
+    }
+
+    .zoom-control {
+        bottom: 145px;
     }
 
     .capture-button {
-        width: 68px;
-        height: 68px;
+        width: 70px;
+        height: 70px;
     }
 
     .capture-button span {
-        width: 54px;
-        height: 54px;
+        width: 56px;
+        height: 56px;
     }
 
     .control-button,
@@ -448,3 +760,4 @@ button {
         height: 52px;
     }
 }
+```
