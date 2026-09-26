@@ -1,5 +1,5 @@
 /* =========================================================
-   DOM
+   DOM Elements
 ========================================================= */
 
 const cameraScreen = document.getElementById("cameraScreen");
@@ -24,8 +24,8 @@ const photoZoomArea = document.getElementById("photoZoomArea");
 const viewerImage = document.getElementById("viewerImage");
 const viewerCloseButton = document.getElementById("viewerCloseButton");
 const deletePhotoButton = document.getElementById("deletePhotoButton");
-const downloadPhotoButton = document.getElementById("downloadPhotoButton"); // 휴대폰 저장 버튼
-const cameraZoomIndicator = document.getElementById("cameraZoomIndicator"); // 카메라 줌 표시기
+const downloadPhotoButton = document.getElementById("downloadPhotoButton");
+const cameraZoomIndicator = document.getElementById("cameraZoomIndicator");
 const zoomInButton = document.getElementById("zoomInButton");
 const zoomOutButton = document.getElementById("zoomOutButton");
 const resetZoomButton = document.getElementById("resetZoomButton");
@@ -50,17 +50,17 @@ let cameraPinchStartZoom = 1;
 
 
 /* =========================================================
-   DB 및 URL 캐시
+   DB & Memory
 ========================================================= */
 
 let db = null;
 let currentPhotoId = null;
 let currentPhotoURL = null;
-let galleryObjectURLs = []; // 갤러리 이미지 URL 메모리 관리용 배열
+let galleryObjectURLs = [];
 
 
 /* =========================================================
-   갤러리 사진 줌 변수
+   갤러리 사진 줌/이동 변수
 ========================================================= */
 
 let viewerZoom = 1;
@@ -78,7 +78,7 @@ let viewerPinchStartZoom = 1;
 
 
 /* =========================================================
-   IndexedDB 열기
+   IndexedDB
 ========================================================= */
 
 function openDatabase() {
@@ -92,21 +92,14 @@ function openDatabase() {
             }
         };
 
-        request.onsuccess = function(event) {
+        request.onsuccess = (event) => {
             db = event.target.result;
             resolve(db);
         };
 
-        request.onerror = function() {
-            reject(request.error);
-        };
+        request.onerror = () => reject(request.error);
     });
 }
-
-
-/* =========================================================
-   사진 DB 작업
-========================================================= */
 
 function savePhoto(blob) {
     return new Promise((resolve, reject) => {
@@ -165,7 +158,7 @@ function deleteAllPhotosFromDatabase() {
 
 
 /* =========================================================
-   카메라 시작
+   카메라 제어
 ========================================================= */
 
 async function startCamera() {
@@ -191,7 +184,6 @@ async function startCamera() {
         cameraTrack = cameraStream.getVideoTracks()[0];
         cameraEnabled = true;
 
-        // 전면 카메라 시 거울 모드 적용
         if (currentFacingMode === "user") {
             cameraPreview.classList.add("mirror");
         } else {
@@ -204,7 +196,7 @@ async function startCamera() {
         try {
             await cameraPreview.play();
         } catch (e) {
-            console.log("자동 재생 정책으로 제한됨:", e);
+            console.log("자동 재생 제한:", e);
         }
 
         setupCameraZoom();
@@ -217,11 +209,6 @@ async function startCamera() {
         showCameraError("카메라를 사용할 수 없습니다. 카메라 권한을 확인해주세요.");
     }
 }
-
-
-/* =========================================================
-   카메라 종료 & 제어
-========================================================= */
 
 function stopCamera() {
     if (cameraStream) {
@@ -274,7 +261,7 @@ function hideCameraError() {
 
 
 /* =========================================================
-   카메라 줌 설정 & 적용
+   카메라 줌 (수정: 실시간 상단 배율 텍스트 동기화)
 ========================================================= */
 
 function setupCameraZoom() {
@@ -290,17 +277,22 @@ function setupCameraZoom() {
             cameraHardwareZoom = true;
         }
     } catch (error) {
-        console.log("카메라 줌 정보 로드 실패", error);
+        console.log("하드웨어 줌 미지원", error);
     }
 }
 
 function updateCameraZoomUI() {
+    // 1. 하드웨어 줌 미지원 시 CSS scale 적용
     if (!cameraHardwareZoom) {
         cameraPreview.style.transform = `scale(${cameraZoom})`;
     } else {
         cameraPreview.style.transform = "scale(1)";
     }
-    cameraZoomIndicator.textContent = `${cameraZoom.toFixed(1)}×`;
+
+    // 2. 상단 줌 배율 텍스트 변경
+    if (cameraZoomIndicator) {
+        cameraZoomIndicator.textContent = `${cameraZoom.toFixed(1)}×`;
+    }
 }
 
 async function applyCameraZoom(value) {
@@ -317,17 +309,12 @@ async function applyCameraZoom(value) {
                 advanced: [{ zoom: actualZoom }]
             });
         } catch (error) {
-            console.log("하드웨어 줌 적용 실패", error);
+            console.log("하드웨어 줌 제어 실패", error);
         }
     }
 
     updateCameraZoomUI();
 }
-
-
-/* =========================================================
-   카메라 핀치 줌 이벤트
-========================================================= */
 
 function getDistance(touch1, touch2) {
     const dx = touch1.clientX - touch2.clientX;
@@ -348,6 +335,8 @@ cameraPreview.addEventListener("touchmove", function(event) {
 
     const currentDistance = getDistance(event.touches[0], event.touches[1]);
     const ratio = currentDistance / cameraPinchStartDistance;
+    
+    // 핀치 실시간 반영
     applyCameraZoom(cameraPinchStartZoom * ratio);
 }, { passive: false });
 
@@ -357,7 +346,7 @@ cameraPreview.addEventListener("touchend", function(event) {
 
 
 /* =========================================================
-   사진 촬영
+   촬영
 ========================================================= */
 
 async function capturePhoto() {
@@ -410,7 +399,7 @@ async function capturePhoto() {
 
 
 /* =========================================================
-   갤러리 제어 및 메모리 관리
+   갤러리 화면
 ========================================================= */
 
 function clearGalleryObjectURLs() {
@@ -462,7 +451,7 @@ async function loadGallery() {
 
 
 /* =========================================================
-   사진 뷰어 & 다운로드 (휴대폰 저장)
+   사진 뷰어 & 휴대폰 저장 (수정: 모바일 저장 보완)
 ========================================================= */
 
 async function openPhotoViewer(id) {
@@ -492,41 +481,67 @@ function closePhotoViewer() {
     resetViewerZoom();
 }
 
-// 기기(휴대폰 갤러리)로 저장 함수
+// 휴대폰/기기 저장 기능 (FileReader로 DataURL 기반 다운로드)
 async function downloadCurrentPhoto() {
     if (!currentPhotoId) return;
 
     const photo = await getPhoto(currentPhotoId);
-    if (!photo) return;
+    if (!photo || !photo.blob) return;
 
-    const a = document.createElement("a");
-    const url = URL.createObjectURL(photo.blob);
-    
-    a.href = url;
-    a.download = `photo_${Date.now()}.jpg`;
-    document.body.appendChild(a);
-    a.click();
-    
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const dataUrl = e.target.result;
+        const link = document.createElement("a");
+        link.href = dataUrl;
+        link.download = `photo_${Date.now()}.jpg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+    reader.readAsDataURL(photo.blob);
 }
 
 
 /* =========================================================
-   갤러리 사진 줌 & 이동
+   갤러리 사진 줌 및 범위(경계선) 제한 구현
 ========================================================= */
 
+// 이동 제한 계산 알고리즘
+function clampViewerPosition() {
+    if (viewerZoom <= 1) {
+        viewerPositionX = 0;
+        viewerPositionY = 0;
+        return;
+    }
+
+    const containerWidth = photoZoomArea.clientWidth;
+    const containerHeight = photoZoomArea.clientHeight;
+
+    const imgWidth = viewerImage.offsetWidth;
+    const imgHeight = viewerImage.offsetHeight;
+
+    if (!imgWidth || !imgHeight) return;
+
+    // 확대된 실제 이미지의 폭과 높이
+    const scaledWidth = imgWidth * viewerZoom;
+    const scaledHeight = imgHeight * viewerZoom;
+
+    // 이미지의 가로/세로 이동 가능 범위 계산
+    const maxX = Math.max(0, (scaledWidth - containerWidth) / 2);
+    const maxY = Math.max(0, (scaledHeight - containerHeight) / 2);
+
+    viewerPositionX = Math.max(-maxX, Math.min(maxX, viewerPositionX));
+    viewerPositionY = Math.max(-maxY, Math.min(maxY, viewerPositionY));
+}
+
 function updateViewerTransform() {
+    clampViewerPosition();
     viewerImage.style.transform = `translate(${viewerPositionX}px, ${viewerPositionY}px) scale(${viewerZoom})`;
     viewerZoomText.textContent = `${viewerZoom.toFixed(1)}×`;
 }
 
 function setViewerZoom(value) {
     viewerZoom = Math.max(VIEWER_MIN_ZOOM, Math.min(VIEWER_MAX_ZOOM, value));
-    if (viewerZoom === 1) {
-        viewerPositionX = 0;
-        viewerPositionY = 0;
-    }
     updateViewerTransform();
 }
 
@@ -620,7 +635,7 @@ async function deleteAllPhotos() {
 
 
 /* =========================================================
-   이벤트 리스너 연결
+   이벤트 연결
 ========================================================= */
 
 cameraPowerButton.addEventListener("click", toggleCamera);
@@ -633,7 +648,7 @@ retryCameraButton.addEventListener("click", startCamera);
 
 viewerCloseButton.addEventListener("click", closePhotoViewer);
 deletePhotoButton.addEventListener("click", deleteCurrentPhoto);
-downloadPhotoButton.addEventListener("click", downloadCurrentPhoto); // 휴대폰 저장 연결
+downloadPhotoButton.addEventListener("click", downloadCurrentPhoto);
 deleteAllButton.addEventListener("click", deleteAllPhotos);
 
 zoomInButton.addEventListener("click", zoomViewerIn);
