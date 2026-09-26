@@ -77,11 +77,10 @@ button {
     -webkit-user-drag: none;
 
     transition: transform 0.05s ease-out;
-}
 
-/* 전면 카메라 거울 모드 */
-#cameraPreview.mirror {
-    transform: scaleX(-1);
+    /* 모바일 브라우저 선명도 개선 옵션 */
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
 }
 
 
@@ -192,7 +191,6 @@ button {
     background: rgba(255, 255, 255, 0.3);
 }
 
-/* 상단 줌 표시기 */
 .zoom-indicator {
     padding: 4px 12px;
 
@@ -236,9 +234,6 @@ button {
     );
 }
 
-
-/* 갤러리 버튼 */
-
 .gallery-open-button {
     width: 60px;
     height: 60px;
@@ -265,9 +260,6 @@ button {
 .gallery-open-button small {
     font-size: 10px;
 }
-
-
-/* 촬영 버튼 */
 
 .capture-button {
     width: 74px;
@@ -298,7 +290,6 @@ button {
 .capture-button:active {
     transform: scale(0.9);
 }
-
 
 .control-space {
     width: 60px;
@@ -361,9 +352,6 @@ button {
     overflow-x: hidden;
 }
 
-
-/* 갤러리 상단 */
-
 .gallery-header {
     position: sticky;
 
@@ -392,7 +380,6 @@ button {
     font-size: 20px;
 }
 
-
 .header-button {
     width: 45px;
     height: 45px;
@@ -405,9 +392,6 @@ button {
 
     font-size: 28px;
 }
-
-
-/* 전체 삭제 */
 
 .delete-all-button {
     padding: 9px 12px;
@@ -424,9 +408,6 @@ button {
 .delete-all-button:active {
     background: #b52d2d;
 }
-
-
-/* 사진 그리드 */
 
 .gallery-grid {
     display: grid;
@@ -464,9 +445,6 @@ button {
 .gallery-item:active {
     opacity: 0.7;
 }
-
-
-/* 빈 갤러리 */
 
 .empty-gallery {
     position: absolute;
@@ -510,9 +488,6 @@ button {
 
     background: #000;
 }
-
-
-/* 상단 */
 
 .viewer-top {
     position: absolute;
@@ -570,9 +545,6 @@ button {
 .delete-button {
     background: rgba(180, 0, 0, 0.5);
 }
-
-
-/* 사진 확대 영역 */
 
 .photo-zoom-area {
     position: absolute;
