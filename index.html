@@ -1,257 +1,180 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>카메라</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>카메라 연속 촬영</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: #000;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      height: 100vh;
+      padding-bottom: 40px;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    /* 촬영 컨트롤 하단 레이아웃 */
+    .camera-controls {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* 연속 촬영 실시간 카운터 (촬영 버튼 위에 아주 작게 표시) */
+    .burst-counter {
+      display: none; /* 평소에는 숨김 */
+      position: absolute;
+      top: -30px; /* 촬영 버튼 바로 위 */
+      font-size: 12px; /* 아주 작은 글씨 */
+      font-weight: 600;
+      color: #ffffff;
+      background-color: rgba(0, 0, 0, 0.6); /* 반투명 배경으로 가독성 확보 */
+      padding: 3px 8px;
+      border-radius: 12px;
+      letter-spacing: 0.5px;
+      pointer-events: none; /* 터치/클릭 이벤트 방해 방지 */
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* 셔터 버튼 */
+    .shutter-btn {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      border: 4px solid #ffffff;
+      background-color: transparent;
+      cursor: pointer;
+      outline: none;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+      transition: transform 0.1s ease;
+    }
+
+    .shutter-btn:active {
+      transform: scale(0.92);
+    }
+  </style>
 </head>
 <body>
 
-    <!-- =========================
-         카메라 화면
-    ========================== -->
-    <div id="cameraScreen" class="screen active">
-
-        <video
-            id="cameraPreview"
-            autoplay
-            playsinline
-            muted
-        ></video>
-
-
-        <!-- 카메라 OFF 상태 -->
-        <div id="cameraOffScreen" class="camera-off hidden">
-
-            <button
-                id="cameraPowerButtonOff"
-                class="camera-power-off-button"
-            >
-                ⏻
-            </button>
-
-        </div>
-
-
-        <!-- 카메라 ON 상태의 UI -->
-        <div id="cameraUI">
-
-            <!-- 상단 -->
-            <div class="top-bar">
-
-                <button
-                    id="cameraPowerButton"
-                    class="top-button"
-                >
-                    ⏻
-                </button>
-
-                <!-- 카메라 배율 표시 -->
-                <div id="cameraZoomIndicator" class="zoom-indicator">
-                    1.0×
-                </div>
-
-                <button
-                    id="switchCameraButton"
-                    class="top-button"
-                >
-                    🔄
-                </button>
-
-            </div>
-
-
-            <!-- 하단 -->
-            <div class="camera-controls">
-
-                <button
-                    id="galleryButton"
-                    class="gallery-open-button"
-                >
-                    <span>🖼️</span>
-                    <small>갤러리</small>
-                </button>
-
-
-                <button
-                    id="captureButton"
-                    class="capture-button"
-                >
-                    <span></span>
-                </button>
-
-
-                <div class="control-space"></div>
-
-            </div>
-
-        </div>
-
-
-        <!-- 카메라 오류 -->
-        <div
-            id="cameraError"
-            class="camera-error hidden"
-        >
-
-            <div id="cameraErrorText">
-                카메라를 사용할 수 없습니다.
-            </div>
-
-            <button id="retryCameraButton">
-                다시 시도
-            </button>
-
-        </div>
-
-    </div>
-
-
-
-    <!-- =========================
-         갤러리
-    ========================== -->
-    <div id="galleryScreen" class="screen">
-
-        <div class="gallery-header">
-
-            <button
-                id="galleryBackButton"
-                class="header-button"
-            >
-                ←
-            </button>
-
-
-            <h1>갤러리</h1>
-
-
-            <button
-                id="deleteAllButton"
-                class="delete-all-button"
-            >
-                전체 삭제
-            </button>
-
-        </div>
-
-
-        <div
-            id="galleryGrid"
-            class="gallery-grid"
-        ></div>
-
-
-        <div
-            id="emptyGallery"
-            class="empty-gallery"
-        >
-
-            <div class="empty-icon">
-                🖼️
-            </div>
-
-            <p>
-                촬영한 사진이 없습니다.
-            </p>
-
-        </div>
-
-    </div>
-
-
-
-    <!-- =========================
-         사진 크게 보기
-    ========================== -->
-    <div
-        id="photoViewer"
-        class="photo-viewer hidden"
-    >
-
-        <div class="viewer-top">
-
-            <button
-                id="viewerCloseButton"
-                class="viewer-button"
-            >
-                ✕
-            </button>
-
-
-            <div id="viewerZoomText">
-                1.0×
-            </div>
-
-
-            <div class="viewer-top-right">
-
-                <button
-                    id="downloadPhotoButton"
-                    class="viewer-button download-button"
-                    title="휴대폰에 저장"
-                >
-                    📥
-                </button>
-
-                <button
-                    id="deletePhotoButton"
-                    class="viewer-button delete-button"
-                >
-                    🗑️
-                </button>
-
-            </div>
-
-        </div>
-
-
-        <div
-            id="photoZoomArea"
-            class="photo-zoom-area"
-        >
-
-            <img
-                id="viewerImage"
-                src=""
-                alt="사진"
-            >
-
-        </div>
-
-
-        <div class="viewer-controls">
-
-            <button
-                id="zoomOutButton"
-                class="viewer-zoom-button"
-            >
-                −
-            </button>
-
-
-            <button
-                id="resetZoomButton"
-                class="viewer-reset-button"
-            >
-                원본
-            </button>
-
-
-            <button
-                id="zoomInButton"
-                class="viewer-zoom-button"
-            >
-                ＋
-            </button>
-
-        </div>
-
-    </div>
-
-
-    <script src="script.js"></script>
+  <!-- 카메라 컨트롤 영역 -->
+  <div class="camera-controls">
+    <!-- 연속 촬영 카운터 (예: 1/30) -->
+    <div id="burstCounter" class="burst-counter">0/30</div>
+    
+    <!-- 셔터 버튼 -->
+    <button id="shutterBtn" class="shutter-btn" aria-label="촬영"></button>
+  </div>
+
+  <script>
+    const MAX_BURST = 30; // 최대 촬영 제한 수
+    const BURST_INTERVAL_MS = 150; // 연속 촬영 간격 (150ms)
+    
+    let currentCount = 0;
+    let burstInterval = null;
+    let holdTimer = null;
+
+    const shutterBtn = document.getElementById('shutterBtn');
+    const burstCounter = document.getElementById('burstCounter');
+
+    // 단발/연속 1장 캡처 수행 함수
+    function capturePhoto() {
+      if (currentCount >= MAX_BURST) {
+        stopBurst(); // 30장 도달 시 자동 정지
+        return;
+      }
+
+      currentCount++;
+      
+      // 카운터 텍스트 실시간 업데이트 (예: 1/30)
+      burstCounter.textContent = `${currentCount}/${MAX_BURST}`;
+
+      /* ---------------------------------------------------
+         * 실제 카메라 이미지 캡처/저장 로직을 여기에 작성하세요.
+         --------------------------------------------------- */
+      console.log(`[촬영 완료] ${currentCount}/${MAX_BURST}`);
+
+      // 30장 모두 찍은 경우 정지
+      if (currentCount >= MAX_BURST) {
+        stopBurst();
+      }
+    }
+
+    // 연속 촬영 시작
+    function startBurst() {
+      currentCount = 0;
+      burstCounter.textContent = `0/${MAX_BURST}`;
+      burstCounter.style.display = 'block'; // 버튼 위에 카운터 표시
+
+      // 첫 번째 사진 즉시 촬영
+      capturePhoto();
+
+      // 150ms 간격으로 반복 촬영
+      burstInterval = setInterval(capturePhoto, BURST_INTERVAL_MS);
+    }
+
+    // 연속 촬영 정지 및 카운터 숨김
+    function stopBurst() {
+      if (burstInterval) {
+        clearInterval(burstInterval);
+        burstInterval = null;
+      }
+      burstCounter.style.display = 'none'; // 촬영 종료 시 카운터 숨김
+    }
+
+    // --- 이벤트 핸들러 (길게 누르기 감지 및 마우스/터치 대응) ---
+
+    function handlePressStart(e) {
+      e.preventDefault();
+      
+      // 버튼 누른 후 200ms 이상 유지 시 연속 촬영 시작
+      holdTimer = setTimeout(() => {
+        startBurst();
+      }, 200);
+    }
+
+    function handlePressEnd(e) {
+      e.preventDefault();
+
+      // 길게 누르기 타이머 해제
+      if (holdTimer) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+      }
+
+      // 연속 촬영 진행 중이었다면 정지, 단발 클릭이었으면 1장만 촬영
+      if (burstInterval) {
+        stopBurst();
+      } else {
+        // 단발 촬영 실행
+        currentCount = 0;
+        capturePhoto();
+        burstCounter.style.display = 'none';
+      }
+    }
+
+    // Touch 및 Mouse 이벤트 연결
+    shutterBtn.addEventListener('touchstart', handlePressStart, { passive: false });
+    shutterBtn.addEventListener('touchend', handlePressEnd, { passive: false });
+    shutterBtn.addEventListener('mousedown', handlePressStart);
+    shutterBtn.addEventListener('mouseup', handlePressEnd);
+    shutterBtn.addEventListener('mouseleave', handlePressEnd);
+  </script>
 
 </body>
 </html>
