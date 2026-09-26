@@ -11,6 +11,7 @@ const cameraPowerButton = document.getElementById("cameraPowerButton");
 const cameraPowerButtonOff = document.getElementById("cameraPowerButtonOff");
 const switchCameraButton = document.getElementById("switchCameraButton");
 const captureButton = document.getElementById("captureButton");
+const burstCounter = document.getElementById("burstCounter");
 const galleryButton = document.getElementById("galleryButton");
 const galleryBackButton = document.getElementById("galleryBackButton");
 const deleteAllButton = document.getElementById("deleteAllButton");
@@ -48,14 +49,19 @@ const CAMERA_MAX_ZOOM = 5;
 let cameraPinchStartDistance = 0;
 let cameraPinchStartZoom = 1;
 
+// 재사용 캔버스 & 연사 최적화 비트맵 큐
+const reusableCanvas = document.createElement("canvas");
+const reusableContext = reusableCanvas.getContext("2d", { alpha: false });
+let burstBitmapQueue = [];
+
 // 연사(Long Press) 관련 변수
-let burstTimer = null;         // 0.3초 누름 감지 타이머
+let burstTimer = null;         // 누름 감지 타이머
 let burstInterval = null;      // 연사 실행 간격 타이머
 let isBurstMode = false;       // 연사 모드 활성화 여부
 let burstCount = 0;            // 현재 연사 장수 카운터
-const MAX_BURST_COUNT = 30;    // 최대 연사 장수 제한 (30장)
-const BURST_THRESHOLD = 300;   // 0.3초 이상 누르면 연사 시작
-const BURST_INTERVAL = 150;    // 0.15초 간격으로 촬영
+const MAX_BURST_COUNT = 30;    // 최대 연사 장수 제한
+const BURST_THRESHOLD = 200;   // 0.2초 이상 누르면 연사 시작
+const BURST_INTERVAL = 150;    // 0.15초 간격 촬영
 
 
 /* =========================================================
@@ -97,7 +103,6 @@ adjacentImage.style.objectFit = "contain";
 adjacentImage.style.display = "none";
 adjacentImage.style.pointerEvents = "none";
 
-// DOM 추가 확인
 if (photoZoomArea) {
     photoZoomArea.appendChild(adjacentImage);
 }
@@ -368,22 +373,22 @@ cameraPreview.addEventListener("touchend", function(event) {
 
 
 /* =========================================================
-   촬영 및 연속 촬영 (이전 이벤트 방식 + 30장 제한)
+   촬영 및 연사 (ImageBitmap 최적화 & 화질 1.0 유지)
 ========================================================= */
 
+// 1. 단발 캡처 (최고 화질 1.0)
 async function capturePhoto() {
     if (!cameraEnabled || !cameraStream || !cameraPreview.videoWidth) return;
 
-    const canvas = document.createElement("canvas");
     const videoWidth = cameraPreview.videoWidth;
     const videoHeight = cameraPreview.videoHeight;
 
-    let sourceX = 0;
-    let sourceY = 0;
     let sourceWidth = videoWidth;
     let sourceHeight = videoHeight;
+    let sourceX = 0;
+    let sourceY = 0;
 
-    if (!cameraHardwareZoom) {
+    if (!cameraHardwareZoom && cameraZoom > 1) {
         const cropRatio = 1 / cameraZoom;
         sourceWidth = videoWidth * cropRatio;
         sourceHeight = videoHeight * cropRatio;
@@ -391,25 +396,29 @@ async function capturePhoto() {
         sourceY = (videoHeight - sourceHeight) / 2;
     }
 
-    canvas.width = sourceWidth;
-    canvas.height = sourceHeight;
-    const context = canvas.getContext("2d");
+    reusableCanvas.width = sourceWidth;
+    reusableCanvas.height = sourceHeight;
 
-    context.imageSmoothingEnabled = true;
-    context.imageSmoothingQuality = "high";
+    reusableContext.imageSmoothingEnabled = true;
+    reusableContext.imageSmoothingQuality = "high";
 
     if (currentFacingMode === "user") {
-        context.translate(canvas.width, 0);
-        context.scale(-1, 1);
+        reusableContext.save();
+        reusableContext.translate(reusableCanvas.width, 0);
+        reusableContext.scale(-1, 1);
     }
 
-    context.drawImage(
+    reusableContext.drawImage(
         cameraPreview,
         sourceX, sourceY, sourceWidth, sourceHeight,
-        0, 0, canvas.width, canvas.height
+        0, 0, reusableCanvas.width, reusableCanvas.height
     );
 
-    canvas.toBlob(async function(blob) {
+    if (currentFacingMode === "user") {
+        reusableContext.restore();
+    }
+
+    reusableCanvas.toBlob(async function(blob) {
         if (!blob) return;
 
         try {
@@ -420,6 +429,21 @@ async function capturePhoto() {
             console.error("사진 저장 실패", error);
         }
     }, "image/jpeg", 1.0);
+}
+
+// 2. 초고속 비트맵 캡처 (연사 렉 0%)
+async function captureBurstFrame() {
+    if (!cameraEnabled || !cameraStream || !cameraPreview.videoWidth) return;
+    try {
+        const bitmap = await createImageBitmap(cameraPreview);
+        burstBitmapQueue.push({
+            bitmap: bitmap,
+            zoom: cameraZoom,
+            facingMode: currentFacingMode
+        });
+    } catch (e) {
+        console.error("비트맵 캡처 실패", e);
+    }
 }
 
 function handleCaptureStart(event) {
@@ -451,24 +475,96 @@ function handleCaptureEnd(event) {
 
 function startBurstCapture() {
     burstCount = 0;
+    burstBitmapQueue = [];
+
+    if (burstCounter) {
+        burstCounter.textContent = `0/${MAX_BURST_COUNT}`;
+        burstCounter.style.display = 'block';
+    }
 
     const executeCapture = () => {
         if (burstCount >= MAX_BURST_COUNT) {
-            stopBurstCapture(); // 30장 넘어가면 연사 차단
+            stopBurstCapture();
             return;
         }
-        capturePhoto();
         burstCount++;
+        if (burstCounter) {
+            burstCounter.textContent = `${burstCount}/${MAX_BURST_COUNT}`;
+        }
+        captureBurstFrame();
     };
 
     executeCapture();
     burstInterval = setInterval(executeCapture, BURST_INTERVAL);
 }
 
-function stopBurstCapture() {
+async function stopBurstCapture() {
     if (burstInterval) {
         clearInterval(burstInterval);
         burstInterval = null;
+    }
+
+    if (burstCounter) {
+        burstCounter.style.display = 'none';
+    }
+
+    if (burstBitmapQueue.length > 0) {
+        const queueToProcess = [...burstBitmapQueue];
+        burstBitmapQueue = [];
+        processAndSaveBurstQueue(queueToProcess);
+    }
+}
+
+// 연사 종료 후 백그라운드 변환 & 저장 (화질 1.0)
+async function processAndSaveBurstQueue(queue) {
+    for (const item of queue) {
+        const { bitmap, zoom, facingMode } = item;
+
+        const videoWidth = bitmap.width;
+        const videoHeight = bitmap.height;
+
+        let sourceWidth = videoWidth;
+        let sourceHeight = videoHeight;
+        let sourceX = 0;
+        let sourceY = 0;
+
+        if (!cameraHardwareZoom && zoom > 1) {
+            const cropRatio = 1 / zoom;
+            sourceWidth = videoWidth * cropRatio;
+            sourceHeight = videoHeight * cropRatio;
+            sourceX = (videoWidth - sourceWidth) / 2;
+            sourceY = (videoHeight - sourceHeight) / 2;
+        }
+
+        reusableCanvas.width = sourceWidth;
+        reusableCanvas.height = sourceHeight;
+
+        if (facingMode === "user") {
+            reusableContext.save();
+            reusableContext.translate(reusableCanvas.width, 0);
+            reusableContext.scale(-1, 1);
+        }
+
+        reusableContext.drawImage(
+            bitmap,
+            sourceX, sourceY, sourceWidth, sourceHeight,
+            0, 0, reusableCanvas.width, reusableCanvas.height
+        );
+
+        if (facingMode === "user") {
+            reusableContext.restore();
+        }
+
+        bitmap.close();
+
+        await new Promise((resolve) => {
+            reusableCanvas.toBlob(async (blob) => {
+                if (blob) {
+                    await savePhoto(blob);
+                }
+                resolve();
+            }, "image/jpeg", 1.0);
+        });
     }
 }
 
@@ -568,7 +664,6 @@ function closePhotoViewer() {
     resetViewerZoom();
 }
 
-// 다음/이전 사진으로 부드럽게 넘기기 (공백 제로)
 function navigatePhoto(direction) {
     if (!currentPhotoId || allPhotosList.length <= 1) return;
 
@@ -585,7 +680,6 @@ function navigatePhoto(direction) {
     const nextPhotoId = allPhotosList[targetIndex].id;
     const windowWidth = window.innerWidth;
 
-    // 슬라이딩 애니메이션 실행
     const duration = 250;
     viewerImage.style.transition = `transform ${duration}ms cubic-bezier(0.25, 1, 0.5, 1)`;
     adjacentImage.style.transition = `transform ${duration}ms cubic-bezier(0.25, 1, 0.5, 1)`;
@@ -633,7 +727,7 @@ async function downloadCurrentPhoto() {
 
 
 /* =========================================================
-   뷰어 줌 & 스와이프 제어 (공백 없는 이어붙이기 드래그)
+   뷰어 줌 & 스와이프 제어
 ========================================================= */
 
 function clampViewerPosition() {
@@ -711,7 +805,6 @@ function resetViewerZoom() {
     updateViewerTransform();
 }
 
-// 스와이프 준비 및 인접 사진 미리 로드
 async function prepareAdjacentImage(direction) {
     const currentIndex = allPhotosList.findIndex(p => p.id === currentPhotoId);
     const targetIndex = currentIndex + direction;
@@ -732,7 +825,6 @@ async function prepareAdjacentImage(direction) {
     return true;
 }
 
-// 터치/마우스 제어
 photoZoomArea.addEventListener("pointerdown", function(event) {
     if (event.pointerType === "touch" && event.isPrimary === false) return;
 
@@ -771,7 +863,6 @@ photoZoomArea.addEventListener("pointermove", async function(event) {
         const isFirst = currentIndex === 0;
         const isLast = currentIndex === allPhotosList.length - 1;
 
-        // 양 끝 경계 체크 (끝이면 움직이지 않음)
         if ((isFirst && deltaX > 0) || (isLast && deltaX < 0)) {
             viewerImage.style.transform = `translate(0px, 0px) scale(1)`;
             adjacentImage.style.display = "none";
@@ -780,7 +871,6 @@ photoZoomArea.addEventListener("pointermove", async function(event) {
 
         const direction = deltaX < 0 ? 1 : -1;
         
-        // 옆 사진 로드 및 나란히 위치 배치
         if (adjacentImage.style.display === "none" || adjacentImage.dataset.dir != direction) {
             const loaded = await prepareAdjacentImage(direction);
             if (!loaded) return;
@@ -789,7 +879,6 @@ photoZoomArea.addEventListener("pointermove", async function(event) {
 
         const adjacentOffsetX = direction > 0 ? windowWidth : -windowWidth;
 
-        // 사진 두 개가 붙어서 함께 이동 (공백 발생 없음)
         viewerImage.style.transform = `translate(${deltaX}px, 0px) scale(1)`;
         adjacentImage.style.transform = `translate(${adjacentOffsetX + deltaX}px, 0px) scale(1)`;
     }
@@ -820,7 +909,6 @@ function handleSwipeEnd() {
 photoZoomArea.addEventListener("pointerup", handleSwipeEnd);
 photoZoomArea.addEventListener("pointercancel", handleSwipeEnd);
 
-// 핀치 줌 제어
 photoZoomArea.addEventListener("touchstart", function(event) {
     if (event.touches.length !== 2) return;
     event.preventDefault();
@@ -843,7 +931,6 @@ photoZoomArea.addEventListener("touchend", function(event) {
     if (event.touches.length < 2) viewerPinchStartDistance = 0;
 });
 
-// 키보드 방향키 제어
 window.addEventListener("keydown", function(event) {
     if (photoViewer.classList.contains("hidden")) return;
 
@@ -895,7 +982,7 @@ async function deleteAllPhotos() {
 
 
 /* =========================================================
-   이벤트 연결 (이전 Mouse/Touch 분리 방식)
+   이벤트 연결
 ========================================================= */
 
 cameraPowerButton.addEventListener("click", toggleCamera);
@@ -905,7 +992,7 @@ galleryButton.addEventListener("click", openGallery);
 galleryBackButton.addEventListener("click", returnToCamera);
 retryCameraButton.addEventListener("click", startCamera);
 
-// 촬영 및 연사 (마우스 & 터치 이벤트 분리 방식)
+// 촬영 & 연사
 captureButton.addEventListener("mousedown", handleCaptureStart);
 captureButton.addEventListener("mouseup", handleCaptureEnd);
 captureButton.addEventListener("mouseleave", handleCaptureEnd);
