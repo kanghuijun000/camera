@@ -1,0 +1,11 @@
+{
+  "name": "카메라 앱",
+  "short_name": "카메라",
+  "description": "사진 촬영과 사진 관리를 위한 카메라 앱",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#000000",
+  "theme_color": "#000000"
+}
