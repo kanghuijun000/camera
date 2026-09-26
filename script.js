@@ -48,6 +48,13 @@ const CAMERA_MAX_ZOOM = 5;
 let cameraPinchStartDistance = 0;
 let cameraPinchStartZoom = 1;
 
+// 연사(Long Press) 관련 변수
+let burstTimer = null;         // 0.3초 누름 감지 타이머
+let burstInterval = null;      // 연사 실행 간격 타이머
+let isBurstMode = false;       // 연사 모드 활성화 여부
+const BURST_THRESHOLD = 300;   // 0.3초 이상 누르면 연사 시작
+const BURST_INTERVAL = 150;    // 0.15초 간격으로 촬영
+
 
 /* =========================================================
    DB & Memory
@@ -57,7 +64,7 @@ let db = null;
 let currentPhotoId = null;
 let currentPhotoURL = null;
 let galleryObjectURLs = [];
-let allPhotosList = []; // 갤러리 내 사진 순서 유지용 배열
+let allPhotosList = []; // 갤러리 내 사진 순서 보관 배열
 
 
 /* =========================================================
@@ -77,7 +84,7 @@ let viewerOriginY = 0;
 let viewerPinchStartDistance = 0;
 let viewerPinchStartZoom = 1;
 
-// 좌우 스와이프 넘기기 관련 변수
+// 좌우 스와이프 넘기기 변수
 let swipeStartX = 0;
 let swipeStartY = 0;
 let swipeCurrentX = 0;
@@ -165,7 +172,7 @@ function deleteAllPhotosFromDatabase() {
 
 
 /* =========================================================
-   카메라 제어 (화질 최상 옵션 적용)
+   카메라 제어
 ========================================================= */
 
 async function startCamera() {
@@ -263,7 +270,7 @@ function hideCameraError() {
 
 
 /* =========================================================
-   카메라 줌 및 전면 반전 제어
+   카메라 줌 및 제어
 ========================================================= */
 
 function setupCameraZoom() {
@@ -343,7 +350,7 @@ cameraPreview.addEventListener("touchend", function(event) {
 
 
 /* =========================================================
-   촬영
+   촬영 및 연속 촬영 (Burst Shooting)
 ========================================================= */
 
 async function capturePhoto() {
@@ -390,11 +397,55 @@ async function capturePhoto() {
         try {
             await savePhoto(blob);
             cameraPreview.style.opacity = "0.4";
-            setTimeout(() => { cameraPreview.style.opacity = "1"; }, 100);
+            setTimeout(() => { cameraPreview.style.opacity = "1"; }, 80);
         } catch (error) {
             console.error("사진 저장 실패", error);
         }
     }, "image/jpeg", 1.0);
+}
+
+// 셔터 누르기 시작 (Down)
+function handleCaptureStart(event) {
+    if (event.cancelable) event.preventDefault();
+    if (!cameraEnabled) return;
+
+    isBurstMode = false;
+
+    // 0.3초 누르고 있으면 연사 동작 시작
+    burstTimer = setTimeout(() => {
+        isBurstMode = true;
+        startBurstCapture();
+    }, BURST_THRESHOLD);
+}
+
+// 셔터 떼기/이탈 (Up/Leave)
+function handleCaptureEnd(event) {
+    if (event && event.cancelable) event.preventDefault();
+
+    clearTimeout(burstTimer);
+    burstTimer = null;
+
+    if (isBurstMode) {
+        stopBurstCapture();
+    } else if (cameraEnabled) {
+        capturePhoto(); // 0.3초 미만 탭: 단발 촬영
+    }
+
+    isBurstMode = false;
+}
+
+function startBurstCapture() {
+    capturePhoto(); // 첫 장 즉시 촬영
+    burstInterval = setInterval(() => {
+        capturePhoto();
+    }, BURST_INTERVAL);
+}
+
+function stopBurstCapture() {
+    if (burstInterval) {
+        clearInterval(burstInterval);
+        burstInterval = null;
+    }
 }
 
 
@@ -433,7 +484,7 @@ async function loadGallery() {
 
     emptyGallery.classList.add("hidden");
     photos.sort((a, b) => b.date - a.date);
-    allPhotosList = photos; // 전체 사진 목록 보관
+    allPhotosList = photos;
 
     photos.forEach(photo => {
         const item = document.createElement("div");
@@ -453,7 +504,7 @@ async function loadGallery() {
 
 
 /* =========================================================
-   사진 뷰어 & 이전/다음 사진 이동 (좌우 스와이프 기능)
+   사진 뷰어 & 좌우 스와이프 이동
 ========================================================= */
 
 async function openPhotoViewer(id) {
@@ -517,7 +568,7 @@ async function downloadCurrentPhoto() {
 
 
 /* =========================================================
-   갤러리 사진 줌, 이동 및 좌우 스와이프 구현
+   뷰어 줌 & 스와이프 제어
 ========================================================= */
 
 function clampViewerPosition() {
@@ -571,14 +622,12 @@ photoZoomArea.addEventListener("pointerdown", function(event) {
     if (event.pointerType === "touch" && event.isPrimary === false) return;
 
     if (viewerZoom > 1) {
-        // 확대 시: 이미지 드래그 이동
         viewerDragging = true;
         viewerDragStartX = event.clientX;
         viewerDragStartY = event.clientY;
         viewerOriginX = viewerPositionX;
         viewerOriginY = viewerPositionY;
     } else {
-        // 배율 1x일 때: 좌우 스와이프 동작 감지 준비
         isSwiping = true;
         swipeStartX = event.clientX;
         swipeStartY = event.clientY;
@@ -608,14 +657,14 @@ function handleSwipeEnd() {
     } else if (isSwiping) {
         isSwiping = false;
         const deltaX = swipeCurrentX - swipeStartX;
-        const threshold = 50; // 넘김 감지 최소 거리 (px)
+        const threshold = 50;
 
         if (deltaX < -threshold) {
-            navigatePhoto(1); // 오른쪽에서 왼쪽 스와이프 -> 다음 사진
+            navigatePhoto(1);  // 다음 사진
         } else if (deltaX > threshold) {
-            navigatePhoto(-1); // 왼쪽에서 오른쪽 스와이프 -> 이전 사진
+            navigatePhoto(-1); // 이전 사진
         } else {
-            updateViewerTransform(); // 제자리 복귀
+            updateViewerTransform();
         }
     }
 }
@@ -644,7 +693,7 @@ photoZoomArea.addEventListener("touchend", function(event) {
     if (event.touches.length < 2) viewerPinchStartDistance = 0;
 });
 
-// 키보드 좌/우 방향키로 사진 넘기기 지원
+// 키보드 방향키 이동
 window.addEventListener("keydown", function(event) {
     if (photoViewer.classList.contains("hidden")) return;
 
@@ -702,10 +751,18 @@ async function deleteAllPhotos() {
 cameraPowerButton.addEventListener("click", toggleCamera);
 cameraPowerButtonOff.addEventListener("click", toggleCamera);
 switchCameraButton.addEventListener("click", switchCamera);
-captureButton.addEventListener("click", capturePhoto);
 galleryButton.addEventListener("click", openGallery);
 galleryBackButton.addEventListener("click", returnToCamera);
 retryCameraButton.addEventListener("click", startCamera);
+
+// 촬영 및 연사 (마우스 & 터치 이벤트 통합)
+captureButton.addEventListener("mousedown", handleCaptureStart);
+captureButton.addEventListener("mouseup", handleCaptureEnd);
+captureButton.addEventListener("mouseleave", handleCaptureEnd);
+
+captureButton.addEventListener("touchstart", handleCaptureStart, { passive: false });
+captureButton.addEventListener("touchend", handleCaptureEnd, { passive: false });
+captureButton.addEventListener("touchcancel", handleCaptureEnd, { passive: false });
 
 viewerCloseButton.addEventListener("click", closePhotoViewer);
 deletePhotoButton.addEventListener("click", deleteCurrentPhoto);
