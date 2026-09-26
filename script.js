@@ -158,7 +158,7 @@ function deleteAllPhotosFromDatabase() {
 
 
 /* =========================================================
-   카메라 제어
+   카메라 제어 (화질 최상 옵션 적용)
 ========================================================= */
 
 async function startCamera() {
@@ -174,8 +174,11 @@ async function startCamera() {
         cameraStream = await navigator.mediaDevices.getUserMedia({
             video: {
                 facingMode: { ideal: currentFacingMode },
-                width: { ideal: 1920 },
-                height: { ideal: 1080 }
+                // 1. 최대 해상도(4K/FHD) 우선 요청
+                width: { min: 1280, ideal: 3840, max: 3840 },
+                height: { min: 720, ideal: 2160, max: 2160 },
+                // 2. 센서 노출 안정화를 위한 프레임 레이트 고정
+                frameRate: { ideal: 30, max: 60 }
             },
             audio: false
         });
@@ -276,16 +279,11 @@ function setupCameraZoom() {
 }
 
 function updateCameraZoomUI() {
-    // 1. 하드웨어 줌 미지원 시 CSS scale 크기 계산
     const scaleFactor = !cameraHardwareZoom ? cameraZoom : 1;
-    
-    // 2. 전면 카메라(user)일 때는 가로 반전(scaleX(-1)) 적용
     const mirrorFactor = (currentFacingMode === "user") ? -1 : 1;
 
-    // 3. scaleX와 scaleY를 동시에 적용하여 실시간 반전 및 줌 동시 유지
     cameraPreview.style.transform = `scale(${scaleFactor * mirrorFactor}, ${scaleFactor})`;
 
-    // 4. 상단 배율 텍스트 동기화
     if (cameraZoomIndicator) {
         cameraZoomIndicator.textContent = `${cameraZoom.toFixed(1)}×`;
     }
@@ -340,7 +338,7 @@ cameraPreview.addEventListener("touchend", function(event) {
 
 
 /* =========================================================
-   촬영 (전면 카메라 저장 시 가로 반전 보정)
+   촬영 (품질 100% 저장 설정)
 ========================================================= */
 
 async function capturePhoto() {
@@ -367,7 +365,10 @@ async function capturePhoto() {
     canvas.height = sourceHeight;
     const context = canvas.getContext("2d");
 
-    // 전면 셀카 촬영 시 미리보기 화면과 동일하게 사진 저장되도록 반전 처리
+    // 캔버스 랜더링 렌더링 힌트 설정 (고화질)
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+
     if (currentFacingMode === "user") {
         context.translate(canvas.width, 0);
         context.scale(-1, 1);
@@ -379,6 +380,7 @@ async function capturePhoto() {
         0, 0, canvas.width, canvas.height
     );
 
+    // 손실 없는 최상 품질(1.0)로 이미지 생성
     canvas.toBlob(async function(blob) {
         if (!blob) return;
 
@@ -389,7 +391,7 @@ async function capturePhoto() {
         } catch (error) {
             console.error("사진 저장 실패", error);
         }
-    }, "image/jpeg", 0.95);
+    }, "image/jpeg", 1.0);
 }
 
 
@@ -497,7 +499,7 @@ async function downloadCurrentPhoto() {
 
 
 /* =========================================================
-   갤러리 사진 줌 및 범위(경계선) 제한
+   갤러리 사진 줌 및 범위 제한
 ========================================================= */
 
 function clampViewerPosition() {
