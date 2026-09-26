@@ -17,6 +17,8 @@ const galleryBackButton = document.getElementById("galleryBackButton");
 const deleteAllButton = document.getElementById("deleteAllButton");
 const galleryGrid = document.getElementById("galleryGrid");
 const emptyGallery = document.getElementById("emptyGallery");
+const emptyIcon = document.getElementById("emptyIcon");
+const emptyText = document.getElementById("emptyText");
 const cameraError = document.getElementById("cameraError");
 const cameraErrorText = document.getElementById("cameraErrorText");
 const retryCameraButton = document.getElementById("retryCameraButton");
@@ -48,6 +50,10 @@ const CAMERA_MAX_ZOOM = 5;
 
 let cameraPinchStartDistance = 0;
 let cameraPinchStartZoom = 1;
+
+// 저장 상태 트래킹 변수
+let isSavingPhotos = false;
+let savingPromise = null;
 
 // 재사용 캔버스 & 연사 최적화 비트맵 큐
 const reusableCanvas = document.createElement("canvas");
@@ -92,7 +98,6 @@ let viewerOriginY = 0;
 let viewerPinchStartDistance = 0;
 let viewerPinchStartZoom = 1;
 
-// 연속 슬라이드 넘기기용 앰비언트 이미지 엘리먼트 생성
 let adjacentImage = document.createElement("img");
 adjacentImage.style.position = "absolute";
 adjacentImage.style.top = "0";
@@ -373,10 +378,10 @@ cameraPreview.addEventListener("touchend", function(event) {
 
 
 /* =========================================================
-   촬영 및 연사 (ImageBitmap 최적화 & 화질 1.0 유지)
+   촬영 및 연사 (속도 고속화 & 저장 동기화)
 ========================================================= */
 
-// 1. 단발 캡처 (최고 화질 1.0)
+// 단발 캡처
 async function capturePhoto() {
     if (!cameraEnabled || !cameraStream || !cameraPreview.videoWidth) return;
 
@@ -418,20 +423,27 @@ async function capturePhoto() {
         reusableContext.restore();
     }
 
-    reusableCanvas.toBlob(async function(blob) {
-        if (!blob) return;
+    isSavingPhotos = true;
+    savingPromise = new Promise((resolve) => {
+        reusableCanvas.toBlob(async function(blob) {
+            if (blob) {
+                try {
+                    await savePhoto(blob);
+                    cameraPreview.style.opacity = "0.4";
+                    setTimeout(() => { cameraPreview.style.opacity = "1"; }, 80);
+                } catch (error) {
+                    console.error("사진 저장 실패", error);
+                }
+            }
+            isSavingPhotos = false;
+            resolve();
+        }, "image/jpeg", 1.0);
+    });
 
-        try {
-            await savePhoto(blob);
-            cameraPreview.style.opacity = "0.4";
-            setTimeout(() => { cameraPreview.style.opacity = "1"; }, 80);
-        } catch (error) {
-            console.error("사진 저장 실패", error);
-        }
-    }, "image/jpeg", 1.0);
+    await savingPromise;
 }
 
-// 2. 초고속 비트맵 캡처 (연사 렉 0%)
+// 연사 프레임 비트맵 저장
 async function captureBurstFrame() {
     if (!cameraEnabled || !cameraStream || !cameraPreview.videoWidth) return;
     try {
@@ -511,66 +523,75 @@ async function stopBurstCapture() {
     if (burstBitmapQueue.length > 0) {
         const queueToProcess = [...burstBitmapQueue];
         burstBitmapQueue = [];
-        processAndSaveBurstQueue(queueToProcess);
+        
+        isSavingPhotos = true;
+        savingPromise = processAndSaveBurstQueue(queueToProcess).then(() => {
+            isSavingPhotos = false;
+        });
     }
 }
 
-// 연사 종료 후 백그라운드 변환 & 저장 (화질 1.0)
+// 연사 고속 병렬 변환 & DB 저장
 async function processAndSaveBurstQueue(queue) {
-    for (const item of queue) {
-        const { bitmap, zoom, facingMode } = item;
+    const saveTasks = queue.map((item) => {
+        return new Promise(async (resolve) => {
+            const { bitmap, zoom, facingMode } = item;
 
-        const videoWidth = bitmap.width;
-        const videoHeight = bitmap.height;
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d", { alpha: false });
 
-        let sourceWidth = videoWidth;
-        let sourceHeight = videoHeight;
-        let sourceX = 0;
-        let sourceY = 0;
+            const videoWidth = bitmap.width;
+            const videoHeight = bitmap.height;
 
-        if (!cameraHardwareZoom && zoom > 1) {
-            const cropRatio = 1 / zoom;
-            sourceWidth = videoWidth * cropRatio;
-            sourceHeight = videoHeight * cropRatio;
-            sourceX = (videoWidth - sourceWidth) / 2;
-            sourceY = (videoHeight - sourceHeight) / 2;
-        }
+            let sourceWidth = videoWidth;
+            let sourceHeight = videoHeight;
+            let sourceX = 0;
+            let sourceY = 0;
 
-        reusableCanvas.width = sourceWidth;
-        reusableCanvas.height = sourceHeight;
+            if (!cameraHardwareZoom && zoom > 1) {
+                const cropRatio = 1 / zoom;
+                sourceWidth = videoWidth * cropRatio;
+                sourceHeight = videoHeight * cropRatio;
+                sourceX = (videoWidth - sourceWidth) / 2;
+                sourceY = (videoHeight - sourceHeight) / 2;
+            }
 
-        if (facingMode === "user") {
-            reusableContext.save();
-            reusableContext.translate(reusableCanvas.width, 0);
-            reusableContext.scale(-1, 1);
-        }
+            canvas.width = sourceWidth;
+            canvas.height = sourceHeight;
 
-        reusableContext.drawImage(
-            bitmap,
-            sourceX, sourceY, sourceWidth, sourceHeight,
-            0, 0, reusableCanvas.width, reusableCanvas.height
-        );
+            if (facingMode === "user") {
+                ctx.save();
+                ctx.translate(canvas.width, 0);
+                ctx.scale(-1, 1);
+            }
 
-        if (facingMode === "user") {
-            reusableContext.restore();
-        }
+            ctx.drawImage(
+                bitmap,
+                sourceX, sourceY, sourceWidth, sourceHeight,
+                0, 0, canvas.width, canvas.height
+            );
 
-        bitmap.close();
+            if (facingMode === "user") {
+                ctx.restore();
+            }
 
-        await new Promise((resolve) => {
-            reusableCanvas.toBlob(async (blob) => {
+            bitmap.close();
+
+            canvas.toBlob(async (blob) => {
                 if (blob) {
                     await savePhoto(blob);
                 }
                 resolve();
             }, "image/jpeg", 1.0);
         });
-    }
+    });
+
+    await Promise.all(saveTasks);
 }
 
 
 /* =========================================================
-   갤러리 화면
+   갤러리 화면 (저장 동기화 및 즉시 반영 보완)
 ========================================================= */
 
 function clearGalleryObjectURLs() {
@@ -594,9 +615,20 @@ async function loadGallery() {
     clearGalleryObjectURLs();
     galleryGrid.innerHTML = "";
 
+    // 여전히 저장이 진행 중이라면 동기화 대기
+    if (isSavingPhotos && savingPromise) {
+        emptyIcon.textContent = "⏳";
+        emptyText.textContent = "촬영한 사진을 저장하는 중입니다...";
+        emptyGallery.classList.remove("hidden");
+        
+        await savingPromise;
+    }
+
     const photos = await getAllPhotos();
 
     if (photos.length === 0) {
+        emptyIcon.textContent = "📷";
+        emptyText.textContent = "저장된 사진이 없습니다.";
         emptyGallery.classList.remove("hidden");
         allPhotosList = [];
         return;
@@ -624,7 +656,7 @@ async function loadGallery() {
 
 
 /* =========================================================
-   사진 뷰어 & 검은 공백 없는 완벽한 연속 넘기기
+   사진 뷰어 & 검은 공백 없는 연속 넘기기
 ========================================================= */
 
 async function openPhotoViewer(id) {
