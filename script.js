@@ -158,7 +158,7 @@ function deleteAllPhotosFromDatabase() {
 
 
 /* =========================================================
-   카메라 제어 (전면/후면 전환 및 거울모드 제어)
+   카메라 제어
 ========================================================= */
 
 async function startCamera() {
@@ -183,13 +183,6 @@ async function startCamera() {
         cameraPreview.srcObject = cameraStream;
         cameraTrack = cameraStream.getVideoTracks()[0];
         cameraEnabled = true;
-
-        // 전면 카메라 사용 시 미리보기 화면 좌우 반전 클래스 제어
-        if (currentFacingMode === "user") {
-            cameraPreview.classList.add("mirror");
-        } else {
-            cameraPreview.classList.remove("mirror");
-        }
 
         cameraOffScreen.classList.add("hidden");
         cameraUI.classList.remove("hidden");
@@ -262,7 +255,7 @@ function hideCameraError() {
 
 
 /* =========================================================
-   카메라 줌
+   카메라 줌 및 전면 반전 제어
 ========================================================= */
 
 function setupCameraZoom() {
@@ -283,12 +276,16 @@ function setupCameraZoom() {
 }
 
 function updateCameraZoomUI() {
-    const scaleTransform = !cameraHardwareZoom ? `scale(${cameraZoom})` : "scale(1)";
-    const mirrorTransform = currentFacingMode === "user" ? "scaleX(-1)" : "";
+    // 1. 하드웨어 줌 미지원 시 CSS scale 크기 계산
+    const scaleFactor = !cameraHardwareZoom ? cameraZoom : 1;
+    
+    // 2. 전면 카메라(user)일 때는 가로 반전(scaleX(-1)) 적용
+    const mirrorFactor = (currentFacingMode === "user") ? -1 : 1;
 
-    // scale 변형과 거울모드 transform을 결합
-    cameraPreview.style.transform = `${scaleTransform} ${mirrorTransform}`.trim();
+    // 3. scaleX와 scaleY를 동시에 적용하여 실시간 반전 및 줌 동시 유지
+    cameraPreview.style.transform = `scale(${scaleFactor * mirrorFactor}, ${scaleFactor})`;
 
+    // 4. 상단 배율 텍스트 동기화
     if (cameraZoomIndicator) {
         cameraZoomIndicator.textContent = `${cameraZoom.toFixed(1)}×`;
     }
@@ -343,7 +340,7 @@ cameraPreview.addEventListener("touchend", function(event) {
 
 
 /* =========================================================
-   촬영 (전면 카메라 좌우반전 보정 반영)
+   촬영 (전면 카메라 저장 시 가로 반전 보정)
 ========================================================= */
 
 async function capturePhoto() {
@@ -370,7 +367,7 @@ async function capturePhoto() {
     canvas.height = sourceHeight;
     const context = canvas.getContext("2d");
 
-    // 전면 셀카 촬영 시 미리보기 화면과 완벽 일치하도록 가로좌우 반전 처리
+    // 전면 셀카 촬영 시 미리보기 화면과 동일하게 사진 저장되도록 반전 처리
     if (currentFacingMode === "user") {
         context.translate(canvas.width, 0);
         context.scale(-1, 1);
