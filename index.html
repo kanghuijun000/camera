@@ -47,6 +47,11 @@
                     ⏻
                 </button>
 
+                <!-- 카메라 배율 표시 추가 -->
+                <div id="cameraZoomIndicator" class="zoom-indicator">
+                    1.0×
+                </div>
+
                 <button
                     id="switchCameraButton"
                     class="top-button"
@@ -180,12 +185,23 @@
             </div>
 
 
-            <button
-                id="deletePhotoButton"
-                class="viewer-button delete-button"
-            >
-                🗑️
-            </button>
+            <div class="viewer-top-right">
+                <!-- 기기에 저장 버튼 추가 -->
+                <button
+                    id="downloadPhotoButton"
+                    class="viewer-button download-button"
+                    title="휴대폰에 저장"
+                >
+                    📥
+                </button>
+
+                <button
+                    id="deletePhotoButton"
+                    class="viewer-button delete-button"
+                >
+                    🗑️
+                </button>
+            </div>
 
         </div>
 
