@@ -75,6 +75,13 @@ button {
     user-select: none;
 
     -webkit-user-drag: none;
+
+    transition: transform 0.05s ease-out;
+}
+
+/* 전면 카메라 거울 모드 */
+#cameraPreview.mirror {
+    transform: scaleX(-1);
 }
 
 
@@ -183,6 +190,21 @@ button {
 
 .top-button:active {
     background: rgba(255, 255, 255, 0.3);
+}
+
+/* 상단 줌 표시기 추가 */
+.zoom-indicator {
+    padding: 4px 12px;
+
+    border-radius: 15px;
+
+    background: rgba(0, 0, 0, 0.5);
+
+    color: #fff;
+
+    font-size: 14px;
+
+    font-weight: bold;
 }
 
 
@@ -520,6 +542,14 @@ button {
     color: white;
 }
 
+.viewer-top-right {
+    display: flex;
+
+    align-items: center;
+
+    gap: 8px;
+}
+
 .viewer-button {
     width: 45px;
     height: 45px;
@@ -531,6 +561,10 @@ button {
     color: white;
 
     font-size: 20px;
+}
+
+.download-button {
+    background: rgba(0, 122, 255, 0.5);
 }
 
 .delete-button {
