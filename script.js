@@ -1,44 +1,84 @@
 /* =========================================================
-   기본 요소
+   DOM
 ========================================================= */
 
-const cameraScreen = document.getElementById("cameraScreen");
-const galleryScreen = document.getElementById("galleryScreen");
+const cameraScreen =
+    document.getElementById("cameraScreen");
 
-const cameraPreview = document.getElementById("cameraPreview");
+const galleryScreen =
+    document.getElementById("galleryScreen");
 
-const cameraOffScreen = document.getElementById("cameraOffScreen");
-const cameraError = document.getElementById("cameraError");
-const cameraErrorText = document.getElementById("cameraErrorText");
+const cameraPreview =
+    document.getElementById("cameraPreview");
 
-const retryCameraButton = document.getElementById("retryCameraButton");
+const cameraUI =
+    document.getElementById("cameraUI");
 
-const cameraPowerButton = document.getElementById("cameraPowerButton");
-const switchCameraButton = document.getElementById("switchCameraButton");
+const cameraOffScreen =
+    document.getElementById("cameraOffScreen");
 
-const captureButton = document.getElementById("captureButton");
+const cameraPowerButton =
+    document.getElementById("cameraPowerButton");
 
-const galleryButton = document.getElementById("galleryButton");
-const galleryBackButton = document.getElementById("galleryBackButton");
+const cameraPowerButtonOff =
+    document.getElementById("cameraPowerButtonOff");
 
-const zoomSlider = document.getElementById("zoomSlider");
-const zoomIndicator = document.getElementById("zoomIndicator");
+const switchCameraButton =
+    document.getElementById("switchCameraButton");
 
-const galleryGrid = document.getElementById("galleryGrid");
-const emptyGallery = document.getElementById("emptyGallery");
+const captureButton =
+    document.getElementById("captureButton");
 
-const photoViewer = document.getElementById("photoViewer");
-const viewerImage = document.getElementById("viewerImage");
-const photoZoomArea = document.getElementById("photoZoomArea");
+const galleryButton =
+    document.getElementById("galleryButton");
 
-const viewerCloseButton = document.getElementById("viewerCloseButton");
-const deletePhotoButton = document.getElementById("deletePhotoButton");
+const galleryBackButton =
+    document.getElementById("galleryBackButton");
 
-const zoomInButton = document.getElementById("zoomInButton");
-const zoomOutButton = document.getElementById("zoomOutButton");
-const resetZoomButton = document.getElementById("resetZoomButton");
+const deleteAllButton =
+    document.getElementById("deleteAllButton");
 
-const viewerZoomText = document.getElementById("viewerZoomText");
+const galleryGrid =
+    document.getElementById("galleryGrid");
+
+const emptyGallery =
+    document.getElementById("emptyGallery");
+
+const cameraError =
+    document.getElementById("cameraError");
+
+const cameraErrorText =
+    document.getElementById("cameraErrorText");
+
+const retryCameraButton =
+    document.getElementById("retryCameraButton");
+
+const photoViewer =
+    document.getElementById("photoViewer");
+
+const photoZoomArea =
+    document.getElementById("photoZoomArea");
+
+const viewerImage =
+    document.getElementById("viewerImage");
+
+const viewerCloseButton =
+    document.getElementById("viewerCloseButton");
+
+const deletePhotoButton =
+    document.getElementById("deletePhotoButton");
+
+const zoomInButton =
+    document.getElementById("zoomInButton");
+
+const zoomOutButton =
+    document.getElementById("zoomOutButton");
+
+const resetZoomButton =
+    document.getElementById("resetZoomButton");
+
+const viewerZoomText =
+    document.getElementById("viewerZoomText");
 
 
 /* =========================================================
@@ -47,19 +87,32 @@ const viewerZoomText = document.getElementById("viewerZoomText");
 
 let cameraStream = null;
 
+let cameraTrack = null;
+
 let cameraEnabled = false;
 
 let currentFacingMode = "environment";
 
-let cameraTrack = null;
+let cameraHardwareZoom = false;
 
-let hardwareZoomSupported = false;
+let cameraZoom = 1;
 
-let currentCameraZoom = 1;
+const CAMERA_MIN_ZOOM = 1;
+
+const CAMERA_MAX_ZOOM = 5;
 
 
 /* =========================================================
-   갤러리 변수
+   카메라 핀치 줌 변수
+========================================================= */
+
+let cameraPinchStartDistance = 0;
+
+let cameraPinchStartZoom = 1;
+
+
+/* =========================================================
+   DB
 ========================================================= */
 
 let db = null;
@@ -70,72 +123,86 @@ let currentPhotoURL = null;
 
 
 /* =========================================================
-   갤러리 사진 확대 변수
+   갤러리 사진 줌 변수
 ========================================================= */
 
 let viewerZoom = 1;
 
-const MIN_VIEWER_ZOOM = 1;
-const MAX_VIEWER_ZOOM = 5;
+const VIEWER_MIN_ZOOM = 1;
+
+const VIEWER_MAX_ZOOM = 5;
 
 let viewerPositionX = 0;
+
 let viewerPositionY = 0;
 
-let isDragging = false;
+let viewerDragging = false;
 
-let dragStartX = 0;
-let dragStartY = 0;
+let viewerDragStartX = 0;
 
-let dragOriginX = 0;
-let dragOriginY = 0;
+let viewerDragStartY = 0;
 
+let viewerOriginX = 0;
 
-/* 핀치 줌 */
+let viewerOriginY = 0;
 
-let pinchStartDistance = 0;
-let pinchStartZoom = 1;
+let viewerPinchStartDistance = 0;
+
+let viewerPinchStartZoom = 1;
 
 
 /* =========================================================
-   IndexedDB
+   IndexedDB 열기
 ========================================================= */
 
 function openDatabase() {
 
     return new Promise((resolve, reject) => {
 
-        const request = indexedDB.open(
-            "StandaloneCameraDatabase",
-            1
-        );
+        const request =
+            indexedDB.open(
+                "StandaloneCameraDatabase",
+                1
+            );
 
-        request.onupgradeneeded = function(event) {
 
-            const database = event.target.result;
+        request.onupgradeneeded =
+            function(event) {
 
-            if (!database.objectStoreNames.contains("photos")) {
+                const database =
+                    event.target.result;
 
-                database.createObjectStore(
-                    "photos",
-                    {
-                        keyPath: "id",
-                        autoIncrement: true
-                    }
-                );
-            }
-        };
+                if (
+                    !database.objectStoreNames.contains(
+                        "photos"
+                    )
+                ) {
 
-        request.onsuccess = function(event) {
+                    database.createObjectStore(
+                        "photos",
+                        {
+                            keyPath: "id",
+                            autoIncrement: true
+                        }
+                    );
+                }
+            };
 
-            db = event.target.result;
 
-            resolve(db);
-        };
+        request.onsuccess =
+            function(event) {
 
-        request.onerror = function() {
+                db = event.target.result;
 
-            reject(request.error);
-        };
+                resolve(db);
+            };
+
+
+        request.onerror =
+            function() {
+
+                reject(request.error);
+            };
     });
 }
 
@@ -148,57 +215,75 @@ function savePhoto(blob) {
 
     return new Promise((resolve, reject) => {
 
-        const transaction = db.transaction(
-            "photos",
-            "readwrite"
-        );
+        const transaction =
+            db.transaction(
+                "photos",
+                "readwrite"
+            );
 
-        const store = transaction.objectStore("photos");
+        const store =
+            transaction.objectStore(
+                "photos"
+            );
 
-        const request = store.add({
-            blob: blob,
-            date: Date.now()
-        });
+        const request =
+            store.add({
+                blob: blob,
+                date: Date.now()
+            });
 
-        request.onsuccess = function() {
 
-            resolve(request.result);
-        };
+        request.onsuccess =
+            function() {
 
-        request.onerror = function() {
+                resolve(request.result);
+            };
 
-            reject(request.error);
-        };
+
+        request.onerror =
+            function() {
+
+                reject(request.error);
+            };
     });
 }
 
 
 /* =========================================================
-   사진 가져오기
+   모든 사진 가져오기
 ========================================================= */
 
 function getAllPhotos() {
 
     return new Promise((resolve, reject) => {
 
-        const transaction = db.transaction(
-            "photos",
-            "readonly"
-        );
+        const transaction =
+            db.transaction(
+                "photos",
+                "readonly"
+            );
 
-        const store = transaction.objectStore("photos");
+        const store =
+            transaction.objectStore(
+                "photos"
+            );
 
-        const request = store.getAll();
+        const request =
+            store.getAll();
 
-        request.onsuccess = function() {
 
-            resolve(request.result);
-        };
+        request.onsuccess =
+            function() {
 
-        request.onerror = function() {
+                resolve(request.result);
+            };
 
-            reject(request.error);
-        };
+
+        request.onerror =
+            function() {
+
+                reject(request.error);
+            };
     });
 }
 
@@ -211,54 +296,111 @@ function getPhoto(id) {
 
     return new Promise((resolve, reject) => {
 
-        const transaction = db.transaction(
-            "photos",
-            "readonly"
-        );
+        const transaction =
+            db.transaction(
+                "photos",
+                "readonly"
+            );
 
-        const store = transaction.objectStore("photos");
+        const store =
+            transaction.objectStore(
+                "photos"
+            );
 
-        const request = store.get(id);
+        const request =
+            store.get(id);
 
-        request.onsuccess = function() {
 
-            resolve(request.result);
-        };
+        request.onsuccess =
+            function() {
 
-        request.onerror = function() {
+                resolve(request.result);
+            };
 
-            reject(request.error);
-        };
+
+        request.onerror =
+            function() {
+
+                reject(request.error);
+            };
     });
 }
 
 
 /* =========================================================
-   사진 삭제
+   사진 하나 삭제
 ========================================================= */
 
 function deletePhotoFromDatabase(id) {
 
     return new Promise((resolve, reject) => {
 
-        const transaction = db.transaction(
-            "photos",
-            "readwrite"
-        );
+        const transaction =
+            db.transaction(
+                "photos",
+                "readwrite"
+            );
 
-        const store = transaction.objectStore("photos");
+        const store =
+            transaction.objectStore(
+                "photos"
+            );
 
-        const request = store.delete(id);
+        const request =
+            store.delete(id);
 
-        request.onsuccess = function() {
 
-            resolve();
-        };
+        request.onsuccess =
+            function() {
 
-        request.onerror = function() {
+                resolve();
+            };
 
-            reject(request.error);
-        };
+
+        request.onerror =
+            function() {
+
+                reject(request.error);
+            };
+    });
+}
+
+
+/* =========================================================
+   전체 사진 삭제
+========================================================= */
+
+function deleteAllPhotosFromDatabase() {
+
+    return new Promise((resolve, reject) => {
+
+        const transaction =
+            db.transaction(
+                "photos",
+                "readwrite"
+            );
+
+        const store =
+            transaction.objectStore(
+                "photos"
+            );
+
+        const request =
+            store.clear();
+
+
+        request.onsuccess =
+            function() {
+
+                resolve();
+            };
+
+
+        request.onerror =
+            function() {
+
+                reject(request.error);
+            };
     });
 }
 
@@ -272,6 +414,7 @@ async function startCamera() {
     hideCameraError();
 
     stopCamera();
+
 
     if (
         !navigator.mediaDevices ||
@@ -292,6 +435,7 @@ async function startCamera() {
             await navigator.mediaDevices.getUserMedia({
 
                 video: {
+
                     facingMode: {
                         ideal: currentFacingMode
                     },
@@ -309,7 +453,9 @@ async function startCamera() {
             });
 
 
-        cameraPreview.srcObject = cameraStream;
+        cameraPreview.srcObject =
+            cameraStream;
+
 
         cameraTrack =
             cameraStream.getVideoTracks()[0];
@@ -317,11 +463,20 @@ async function startCamera() {
 
         cameraEnabled = true;
 
-        cameraOffScreen.classList.add("hidden");
+
+        cameraOffScreen.classList.add(
+            "hidden"
+        );
+
+        cameraUI.classList.remove(
+            "hidden"
+        );
+
 
         await cameraPreview.play();
 
-        setupHardwareZoom();
+
+        setupCameraZoom();
 
     } catch (error) {
 
@@ -329,10 +484,16 @@ async function startCamera() {
 
         cameraEnabled = false;
 
-        cameraOffScreen.classList.remove("hidden");
+        cameraUI.classList.add(
+            "hidden"
+        );
+
+        cameraOffScreen.classList.remove(
+            "hidden"
+        );
 
         showCameraError(
-            "카메라를 사용할 수 없습니다.\n카메라 권한을 확인해주세요."
+            "카메라를 사용할 수 없습니다. 카메라 권한을 확인해주세요."
         );
     }
 }
@@ -353,21 +514,67 @@ function stopCamera() {
         cameraStream = null;
     }
 
+
     cameraTrack = null;
 
     cameraPreview.srcObject = null;
 
     cameraEnabled = false;
 
-    hardwareZoomSupported = false;
+    cameraHardwareZoom = false;
 
-    currentCameraZoom = 1;
+    cameraZoom = 1;
 
-    zoomSlider.value = 1;
+    cameraPreview.style.transform =
+        "scale(1)";
+}
 
-    zoomIndicator.textContent = "1.0×";
 
-    cameraPreview.style.transform = "scale(1)";
+/* =========================================================
+   카메라 OFF
+========================================================= */
+
+function turnCameraOff() {
+
+    stopCamera();
+
+
+    /*
+       카메라 UI 전체 숨김
+    */
+
+    cameraUI.classList.add(
+        "hidden"
+    );
+
+
+    /*
+       검은 화면 + 전원 버튼만 표시
+    */
+
+    cameraOffScreen.classList.remove(
+        "hidden"
+    );
+}
+
+
+/* =========================================================
+   카메라 ON
+========================================================= */
+
+async function turnCameraOn() {
+
+    cameraOffScreen.classList.add(
+        "hidden"
+    );
+
+
+    cameraUI.classList.remove(
+        "hidden"
+    );
+
+
+    await startCamera();
 }
 
 
@@ -379,22 +586,11 @@ async function toggleCamera() {
 
     if (cameraEnabled) {
 
-        stopCamera();
-
-        cameraOffScreen.classList.remove("hidden");
-
-        cameraPowerButton.textContent = "⏻";
+        turnCameraOff();
 
     } else {
 
-        cameraOffScreen.classList.add("hidden");
-
-        await startCamera();
-
-        if (cameraEnabled) {
-
-            cameraPowerButton.textContent = "⏻";
-        }
+        await turnCameraOn();
     }
 }
 
@@ -409,10 +605,12 @@ async function switchCamera() {
         return;
     }
 
+
     currentFacingMode =
         currentFacingMode === "environment"
             ? "user"
             : "environment";
+
 
     await startCamera();
 }
@@ -424,43 +622,52 @@ async function switchCamera() {
 
 function showCameraError(message) {
 
-    cameraErrorText.textContent = message;
+    cameraErrorText.textContent =
+        message;
 
-    cameraError.classList.remove("hidden");
+    cameraError.classList.remove(
+        "hidden"
+    );
 }
+
 
 function hideCameraError() {
 
-    cameraError.classList.add("hidden");
+    cameraError.classList.add(
+        "hidden"
+    );
 }
 
 
 /* =========================================================
-   하드웨어 줌 확인
+   카메라 줌 설정
 ========================================================= */
 
-function setupHardwareZoom() {
+function setupCameraZoom() {
 
-    hardwareZoomSupported = false;
+    cameraHardwareZoom = false;
 
-    currentCameraZoom = 1;
+    cameraZoom = 1;
 
-    zoomSlider.min = 1;
-    zoomSlider.max = 5;
-    zoomSlider.step = 0.1;
-    zoomSlider.value = 1;
+    cameraPreview.style.transform =
+        "scale(1)";
 
-    if (!cameraTrack) {
+
+    if (
+        !cameraTrack ||
+        typeof cameraTrack.getCapabilities !==
+        "function"
+    ) {
+
         return;
     }
 
 
-    if (
-        typeof cameraTrack.getCapabilities === "function"
-    ) {
+    try {
 
         const capabilities =
             cameraTrack.getCapabilities();
+
 
         if (
             capabilities.zoom &&
@@ -468,58 +675,85 @@ function setupHardwareZoom() {
             capabilities.zoom.max !== undefined
         ) {
 
-            hardwareZoomSupported = true;
+            cameraHardwareZoom = true;
 
-            zoomSlider.min =
-                capabilities.zoom.min;
-
-            zoomSlider.max =
-                Math.min(
-                    capabilities.zoom.max,
-                    10
-                );
-
-            zoomSlider.step =
-                capabilities.zoom.step || 0.1;
-
-            zoomSlider.value =
-                capabilities.zoom.min;
-
-            currentCameraZoom =
-                Number(zoomSlider.value);
-
-            updateZoomText();
         }
+
+    } catch (error) {
+
+        console.log(
+            "카메라 줌 정보를 가져올 수 없습니다.",
+            error
+        );
     }
 }
 
 
 /* =========================================================
-   카메라 줌 변경
+   카메라 줌 적용
 ========================================================= */
 
-async function changeCameraZoom(value) {
+async function applyCameraZoom(value) {
 
-    currentCameraZoom = Number(value);
+    cameraZoom =
+        Math.max(
+            CAMERA_MIN_ZOOM,
+            Math.min(
+                CAMERA_MAX_ZOOM,
+                value
+            )
+        );
 
-    updateZoomText();
 
+    /*
+       실제 카메라 하드웨어 줌
+    */
 
     if (
-        hardwareZoomSupported &&
+        cameraHardwareZoom &&
         cameraTrack
     ) {
 
         try {
 
+            const capabilities =
+                cameraTrack.getCapabilities();
+
+
+            const min =
+                capabilities.zoom.min;
+
+            const max =
+                Math.min(
+                    capabilities.zoom.max,
+                    CAMERA_MAX_ZOOM
+                );
+
+
+            const actualZoom =
+                Math.max(
+                    min,
+                    Math.min(
+                        max,
+                        cameraZoom
+                    )
+                );
+
+
             await cameraTrack.applyConstraints({
 
                 advanced: [
                     {
-                        zoom: currentCameraZoom
+                        zoom: actualZoom
                     }
                 ]
             });
+
+
+            /*
+               하드웨어 줌을 사용하는 경우
+               CSS 확대는 사용하지 않음
+            */
 
             cameraPreview.style.transform =
                 "scale(1)";
@@ -529,7 +763,7 @@ async function changeCameraZoom(value) {
         } catch (error) {
 
             console.log(
-                "하드웨어 줌 실패:",
+                "하드웨어 줌 적용 실패",
                 error
             );
         }
@@ -538,23 +772,139 @@ async function changeCameraZoom(value) {
 
     /*
        하드웨어 줌을 지원하지 않는 경우
-       화면 확대 방식으로 대체
+       화면 자체를 확대
     */
 
     cameraPreview.style.transform =
-        `scale(${currentCameraZoom})`;
+        `scale(${cameraZoom})`;
 }
 
 
 /* =========================================================
-   줌 표시
+   카메라 핀치 거리
 ========================================================= */
 
-function updateZoomText() {
+function getDistance(touch1, touch2) {
 
-    zoomIndicator.textContent =
-        `${currentCameraZoom.toFixed(1)}×`;
+    const dx =
+        touch1.clientX -
+        touch2.clientX;
+
+    const dy =
+        touch1.clientY -
+        touch2.clientY;
+
+    return Math.sqrt(
+        dx * dx + dy * dy
+    );
 }
+
+
+/* =========================================================
+   카메라 핀치 시작
+========================================================= */
+
+cameraPreview.addEventListener(
+    "touchstart",
+    function(event) {
+
+        if (
+            !cameraEnabled ||
+            event.touches.length !== 2
+        ) {
+
+            return;
+        }
+
+
+        event.preventDefault();
+
+
+        cameraPinchStartDistance =
+            getDistance(
+                event.touches[0],
+                event.touches[1]
+            );
+
+
+        cameraPinchStartZoom =
+            cameraZoom;
+
+    },
+    {
+        passive: false
+    }
+);
+
+
+/* =========================================================
+   카메라 핀치 진행
+========================================================= */
+
+cameraPreview.addEventListener(
+    "touchmove",
+    function(event) {
+
+        if (
+            !cameraEnabled ||
+            event.touches.length !== 2
+        ) {
+
+            return;
+        }
+
+
+        event.preventDefault();
+
+
+        if (
+            cameraPinchStartDistance <= 0
+        ) {
+
+            return;
+        }
+
+
+        const currentDistance =
+            getDistance(
+                event.touches[0],
+                event.touches[1]
+            );
+
+
+        const ratio =
+            currentDistance /
+            cameraPinchStartDistance;
+
+
+        const newZoom =
+            cameraPinchStartZoom *
+            ratio;
+
+
+        applyCameraZoom(newZoom);
+
+    },
+    {
+        passive: false
+    }
+);
+
+
+/* =========================================================
+   카메라 핀치 종료
+========================================================= */
+
+cameraPreview.addEventListener(
+    "touchend",
+    function(event) {
+
+        if (event.touches.length < 2) {
+
+            cameraPinchStartDistance = 0;
+        }
+    }
+);
 
 
 /* =========================================================
@@ -576,6 +926,7 @@ async function capturePhoto() {
     const canvas =
         document.createElement("canvas");
 
+
     const videoWidth =
         cameraPreview.videoWidth;
 
@@ -584,27 +935,33 @@ async function capturePhoto() {
 
 
     let sourceX = 0;
+
     let sourceY = 0;
-    let sourceWidth = videoWidth;
-    let sourceHeight = videoHeight;
+
+    let sourceWidth =
+        videoWidth;
+
+    let sourceHeight =
+        videoHeight;
 
 
     /*
-       실제 하드웨어 줌이 아니라
-       화면 확대 방식으로 사용 중이라면
-       사진도 확대된 영역을 저장
+       실제 하드웨어 줌을 사용할 수 없을 때
+       확대된 영역을 잘라서 저장
     */
 
-    if (!hardwareZoomSupported) {
+    if (!cameraHardwareZoom) {
 
         const cropRatio =
-            1 / currentCameraZoom;
+            1 / cameraZoom;
+
 
         sourceWidth =
             videoWidth * cropRatio;
 
         sourceHeight =
             videoHeight * cropRatio;
+
 
         sourceX =
             (videoWidth - sourceWidth) / 2;
@@ -614,8 +971,11 @@ async function capturePhoto() {
     }
 
 
-    canvas.width = sourceWidth;
-    canvas.height = sourceHeight;
+    canvas.width =
+        sourceWidth;
+
+    canvas.height =
+        sourceHeight;
 
 
     const context =
@@ -623,18 +983,22 @@ async function capturePhoto() {
 
 
     /*
-       전면 카메라 사진은
-       일반적인 셀카처럼 좌우 반전
+       전면 카메라 좌우 반전
     */
 
-    if (currentFacingMode === "user") {
+    if (
+        currentFacingMode === "user"
+    ) {
 
         context.translate(
             canvas.width,
             0
         );
 
-        context.scale(-1, 1);
+        context.scale(
+            -1,
+            1
+        );
     }
 
 
@@ -658,26 +1022,35 @@ async function capturePhoto() {
                 return;
             }
 
+
             try {
 
                 await savePhoto(blob);
 
+
                 /*
-                   촬영 후 작은 시각적 효과
+                   촬영 효과
                 */
 
-                cameraPreview.style.opacity = "0.5";
+                cameraPreview.style.opacity =
+                    "0.4";
 
-                setTimeout(() => {
 
-                    cameraPreview.style.opacity = "1";
+                setTimeout(
+                    function() {
 
-                }, 100);
+                        cameraPreview.style.opacity =
+                            "1";
+
+                    },
+                    100
+                );
+
 
             } catch (error) {
 
                 console.error(
-                    "사진 저장 실패:",
+                    "사진 저장 실패",
                     error
                 );
             }
@@ -695,9 +1068,14 @@ async function capturePhoto() {
 
 async function openGallery() {
 
-    cameraScreen.classList.remove("active");
+    cameraScreen.classList.remove(
+        "active"
+    );
 
-    galleryScreen.classList.add("active");
+    galleryScreen.classList.add(
+        "active"
+    );
+
 
     await loadGallery();
 }
@@ -709,9 +1087,13 @@ async function openGallery() {
 
 function returnToCamera() {
 
-    galleryScreen.classList.remove("active");
+    galleryScreen.classList.remove(
+        "active"
+    );
 
-    cameraScreen.classList.add("active");
+    cameraScreen.classList.add(
+        "active"
+    );
 }
 
 
@@ -722,6 +1104,7 @@ function returnToCamera() {
 async function loadGallery() {
 
     galleryGrid.innerHTML = "";
+
 
     const photos =
         await getAllPhotos();
@@ -737,51 +1120,73 @@ async function loadGallery() {
     }
 
 
-    emptyGallery.classList.add("hidden");
-
-
-    /*
-       최신 사진이 먼저 나오도록
-    */
-
-    photos.sort(
-        (a, b) => b.date - a.date
+    emptyGallery.classList.add(
+        "hidden"
     );
 
 
-    photos.forEach(photo => {
-
-        const item =
-            document.createElement("div");
-
-        item.className = "gallery-item";
+    photos.sort(
+        (a, b) =>
+            b.date - a.date
+    );
 
 
-        const image =
-            document.createElement("img");
+    photos.forEach(
+        function(photo) {
 
-        const url =
-            URL.createObjectURL(photo.blob);
-
-        image.src = url;
-
-        image.onload = function() {
-
-            URL.revokeObjectURL(url);
-        };
+            const item =
+                document.createElement(
+                    "div"
+                );
 
 
-        item.appendChild(image);
+            item.className =
+                "gallery-item";
 
 
-        item.addEventListener(
-            "click",
-            () => openPhotoViewer(photo.id)
-        );
+            const image =
+                document.createElement(
+                    "img"
+                );
 
 
-        galleryGrid.appendChild(item);
-    });
+            const url =
+                URL.createObjectURL(
+                    photo.blob
+                );
+
+
+            image.src = url;
+
+
+            image.onload =
+                function() {
+
+                    URL.revokeObjectURL(
+                        url
+                    );
+                };
+
+
+            item.appendChild(image);
+
+
+            item.addEventListener(
+                "click",
+                function() {
+
+                    openPhotoViewer(
+                        photo.id
+                    );
+                }
+            );
+
+
+            galleryGrid.appendChild(
+                item
+            );
+        }
+    );
 }
 
 
@@ -793,6 +1198,7 @@ async function openPhotoViewer(id) {
 
     const photo =
         await getPhoto(id);
+
 
     if (!photo) {
         return;
@@ -854,12 +1260,13 @@ function closePhotoViewer() {
 
     currentPhotoId = null;
 
+
     resetViewerZoom();
 }
 
 
 /* =========================================================
-   사진 확대 적용
+   갤러리 사진 줌 적용
 ========================================================= */
 
 function updateViewerTransform() {
@@ -867,34 +1274,32 @@ function updateViewerTransform() {
     viewerImage.style.transform =
         `translate(${viewerPositionX}px, ${viewerPositionY}px) scale(${viewerZoom})`;
 
+
     viewerZoomText.textContent =
         `${viewerZoom.toFixed(1)}×`;
 }
 
 
 /* =========================================================
-   사진 확대
+   갤러리 사진 줌 설정
 ========================================================= */
 
 function setViewerZoom(value) {
 
     viewerZoom =
         Math.max(
-            MIN_VIEWER_ZOOM,
+            VIEWER_MIN_ZOOM,
             Math.min(
-                MAX_VIEWER_ZOOM,
+                VIEWER_MAX_ZOOM,
                 value
             )
         );
 
 
-    /*
-       원본 크기에서는 위치 초기화
-    */
-
     if (viewerZoom === 1) {
 
         viewerPositionX = 0;
+
         viewerPositionY = 0;
     }
 
@@ -904,7 +1309,7 @@ function setViewerZoom(value) {
 
 
 /* =========================================================
-   줌 + 버튼
+   갤러리 줌 확대
 ========================================================= */
 
 function zoomViewerIn() {
@@ -916,7 +1321,7 @@ function zoomViewerIn() {
 
 
 /* =========================================================
-   줌 - 버튼
+   갤러리 줌 축소
 ========================================================= */
 
 function zoomViewerOut() {
@@ -928,7 +1333,7 @@ function zoomViewerOut() {
 
 
 /* =========================================================
-   원본 크기
+   갤러리 원본
 ========================================================= */
 
 function resetViewerZoom() {
@@ -944,29 +1349,33 @@ function resetViewerZoom() {
 
 
 /* =========================================================
-   사진 드래그
+   갤러리 사진 드래그
 ========================================================= */
 
 photoZoomArea.addEventListener(
     "pointerdown",
     function(event) {
 
-        /*
-           줌이 1배일 때는 이동하지 않음
-        */
-
         if (viewerZoom <= 1) {
             return;
         }
 
 
-        isDragging = true;
+        viewerDragging = true;
 
-        dragStartX = event.clientX;
-        dragStartY = event.clientY;
 
-        dragOriginX = viewerPositionX;
-        dragOriginY = viewerPositionY;
+        viewerDragStartX =
+            event.clientX;
+
+        viewerDragStartY =
+            event.clientY;
+
+
+        viewerOriginX =
+            viewerPositionX;
+
+        viewerOriginY =
+            viewerPositionY;
 
 
         photoZoomArea.setPointerCapture(
@@ -980,23 +1389,25 @@ photoZoomArea.addEventListener(
     "pointermove",
     function(event) {
 
-        if (!isDragging) {
+        if (!viewerDragging) {
             return;
         }
 
 
         const dx =
-            event.clientX - dragStartX;
+            event.clientX -
+            viewerDragStartX;
 
         const dy =
-            event.clientY - dragStartY;
+            event.clientY -
+            viewerDragStartY;
 
 
         viewerPositionX =
-            dragOriginX + dx;
+            viewerOriginX + dx;
 
         viewerPositionY =
-            dragOriginY + dy;
+            viewerOriginY + dy;
 
 
         updateViewerTransform();
@@ -1008,7 +1419,7 @@ photoZoomArea.addEventListener(
     "pointerup",
     function() {
 
-        isDragging = false;
+        viewerDragging = false;
     }
 );
 
@@ -1017,50 +1428,47 @@ photoZoomArea.addEventListener(
     "pointercancel",
     function() {
 
-        isDragging = false;
+        viewerDragging = false;
     }
 );
 
 
 /* =========================================================
-   핀치 줌
+   갤러리 사진 핀치 시작
 ========================================================= */
-
-function getTouchDistance(touch1, touch2) {
-
-    const dx =
-        touch1.clientX - touch2.clientX;
-
-    const dy =
-        touch1.clientY - touch2.clientY;
-
-    return Math.sqrt(
-        dx * dx + dy * dy
-    );
-}
-
 
 photoZoomArea.addEventListener(
     "touchstart",
     function(event) {
 
-        if (event.touches.length === 2) {
-
-            pinchStartDistance =
-                getTouchDistance(
-                    event.touches[0],
-                    event.touches[1]
-                );
-
-            pinchStartZoom =
-                viewerZoom;
+        if (event.touches.length !== 2) {
+            return;
         }
+
+
+        event.preventDefault();
+
+
+        viewerPinchStartDistance =
+            getDistance(
+                event.touches[0],
+                event.touches[1]
+            );
+
+
+        viewerPinchStartZoom =
+            viewerZoom;
+
     },
     {
         passive: false
     }
 );
 
+
+/* =========================================================
+   갤러리 사진 핀치 진행
+========================================================= */
 
 photoZoomArea.addEventListener(
     "touchmove",
@@ -1074,26 +1482,31 @@ photoZoomArea.addEventListener(
         event.preventDefault();
 
 
+        if (
+            viewerPinchStartDistance <= 0
+        ) {
+
+            return;
+        }
+
+
         const currentDistance =
-            getTouchDistance(
+            getDistance(
                 event.touches[0],
                 event.touches[1]
             );
 
 
-        if (pinchStartDistance <= 0) {
-            return;
-        }
-
-
         const ratio =
             currentDistance /
-            pinchStartDistance;
+            viewerPinchStartDistance;
 
 
         setViewerZoom(
-            pinchStartZoom * ratio
+            viewerPinchStartZoom *
+            ratio
         );
+
     },
     {
         passive: false
@@ -1101,20 +1514,24 @@ photoZoomArea.addEventListener(
 );
 
 
+/* =========================================================
+   갤러리 사진 핀치 종료
+========================================================= */
+
 photoZoomArea.addEventListener(
     "touchend",
     function(event) {
 
         if (event.touches.length < 2) {
 
-            pinchStartDistance = 0;
+            viewerPinchStartDistance = 0;
         }
     }
 );
 
 
 /* =========================================================
-   사진 삭제
+   개별 사진 삭제
 ========================================================= */
 
 async function deleteCurrentPhoto() {
@@ -1144,12 +1561,13 @@ async function deleteCurrentPhoto() {
 
         closePhotoViewer();
 
+
         await loadGallery();
 
     } catch (error) {
 
         console.error(
-            "사진 삭제 실패:",
+            "사진 삭제 실패",
             error
         );
     }
@@ -1157,10 +1575,73 @@ async function deleteCurrentPhoto() {
 
 
 /* =========================================================
-   이벤트 연결
+   전체 사진 삭제
+========================================================= */
+
+async function deleteAllPhotos() {
+
+    const photos =
+        await getAllPhotos();
+
+
+    if (photos.length === 0) {
+
+        alert(
+            "삭제할 사진이 없습니다."
+        );
+
+        return;
+    }
+
+
+    const confirmed =
+        confirm(
+            `사진 ${photos.length}장을 모두 삭제할까요?`
+        );
+
+
+    if (!confirmed) {
+        return;
+    }
+
+
+    try {
+
+        await deleteAllPhotosFromDatabase();
+
+
+        await loadGallery();
+
+
+        alert(
+            "모든 사진이 삭제되었습니다."
+        );
+
+    } catch (error) {
+
+        console.error(
+            "전체 삭제 실패",
+            error
+        );
+
+        alert(
+            "사진을 삭제하지 못했습니다."
+        );
+    }
+}
+
+
+/* =========================================================
+   이벤트
 ========================================================= */
 
 cameraPowerButton.addEventListener(
+    "click",
+    toggleCamera
+);
+
+
+cameraPowerButtonOff.addEventListener(
     "click",
     toggleCamera
 );
@@ -1196,17 +1677,6 @@ retryCameraButton.addEventListener(
 );
 
 
-zoomSlider.addEventListener(
-    "input",
-    function() {
-
-        changeCameraZoom(
-            this.value
-        );
-    }
-);
-
-
 viewerCloseButton.addEventListener(
     "click",
     closePhotoViewer
@@ -1216,6 +1686,12 @@ viewerCloseButton.addEventListener(
 deletePhotoButton.addEventListener(
     "click",
     deleteCurrentPhoto
+);
+
+
+deleteAllButton.addEventListener(
+    "click",
+    deleteAllPhotos
 );
 
 
@@ -1238,7 +1714,7 @@ resetZoomButton.addEventListener(
 
 
 /* =========================================================
-   화면 초기화
+   초기화
 ========================================================= */
 
 async function initializeApp() {
@@ -1252,7 +1728,7 @@ async function initializeApp() {
     } catch (error) {
 
         console.error(
-            "앱 초기화 실패:",
+            "앱 초기화 실패",
             error
         );
 
