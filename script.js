@@ -404,21 +404,18 @@ async function capturePhoto() {
     }, "image/jpeg", 1.0);
 }
 
-// 셔터 누르기 시작 (Down)
 function handleCaptureStart(event) {
     if (event.cancelable) event.preventDefault();
     if (!cameraEnabled) return;
 
     isBurstMode = false;
 
-    // 0.3초 누르고 있으면 연사 동작 시작
     burstTimer = setTimeout(() => {
         isBurstMode = true;
         startBurstCapture();
     }, BURST_THRESHOLD);
 }
 
-// 셔터 떼기/이탈 (Up/Leave)
 function handleCaptureEnd(event) {
     if (event && event.cancelable) event.preventDefault();
 
@@ -428,14 +425,14 @@ function handleCaptureEnd(event) {
     if (isBurstMode) {
         stopBurstCapture();
     } else if (cameraEnabled) {
-        capturePhoto(); // 0.3초 미만 탭: 단발 촬영
+        capturePhoto();
     }
 
     isBurstMode = false;
 }
 
 function startBurstCapture() {
-    capturePhoto(); // 첫 장 즉시 촬영
+    capturePhoto();
     burstInterval = setInterval(() => {
         capturePhoto();
     }, BURST_INTERVAL);
@@ -504,7 +501,7 @@ async function loadGallery() {
 
 
 /* =========================================================
-   사진 뷰어 & 좌우 스와이프 이동
+   사진 뷰어 & 부드러운 스와이프 전환
 ========================================================= */
 
 async function openPhotoViewer(id) {
@@ -515,6 +512,9 @@ async function openPhotoViewer(id) {
     if (currentPhotoURL) URL.revokeObjectURL(currentPhotoURL);
 
     currentPhotoURL = URL.createObjectURL(photo.blob);
+    
+    // 트랜지션 해제 후 중앙 초기화
+    viewerImage.style.transition = "none";
     viewerImage.src = currentPhotoURL;
 
     resetViewerZoom();
@@ -529,11 +529,13 @@ function closePhotoViewer() {
         currentPhotoURL = null;
     }
 
+    viewerImage.style.transition = "none";
     viewerImage.src = "";
     currentPhotoId = null;
     resetViewerZoom();
 }
 
+// 사진 넘기기 실행 (방향: 1 = 다음 사진, -1 = 이전 사진)
 function navigatePhoto(direction) {
     if (!currentPhotoId || allPhotosList.length <= 1) return;
 
@@ -542,9 +544,41 @@ function navigatePhoto(direction) {
 
     let targetIndex = currentIndex + direction;
 
-    if (targetIndex >= 0 && targetIndex < allPhotosList.length) {
-        openPhotoViewer(allPhotosList[targetIndex].id);
+    // 양 끝 경계 체크: 처음/마지막 사진이면 넘기지 않음
+    if (targetIndex < 0 || targetIndex >= allPhotosList.length) {
+        resetViewerTransformSmooth();
+        return;
     }
+
+    const nextPhotoId = allPhotosList[targetIndex].id;
+    const windowWidth = window.innerWidth;
+
+    // 1. 슬라이드 슬라이딩 애니메이션 (화면 밖으로 빠져나감)
+    viewerImage.style.transition = "transform 0.25s cubic-bezier(0.25, 1, 0.5, 1)";
+    const exitX = direction > 0 ? -windowWidth : windowWidth;
+    viewerImage.style.transform = `translate(${exitX}px, 0px) scale(1)`;
+
+    // 2. 애니메이션 끝난 후 다음 이미지로 전환
+    setTimeout(async () => {
+        const photo = await getPhoto(nextPhotoId);
+        if (!photo) return;
+
+        currentPhotoId = nextPhotoId;
+        if (currentPhotoURL) URL.revokeObjectURL(currentPhotoURL);
+
+        currentPhotoURL = URL.createObjectURL(photo.blob);
+        viewerImage.src = currentPhotoURL;
+
+        // 반대편 위치로 순식간에 이동 (애니메이션 off)
+        viewerImage.style.transition = "none";
+        const enterX = direction > 0 ? windowWidth : -windowWidth;
+        viewerImage.style.transform = `translate(${enterX}px, 0px) scale(1)`;
+
+        // 리플로우 강제 유발 후 중앙으로 부드럽게 들어옴
+        void viewerImage.offsetWidth;
+        viewerImage.style.transition = "transform 0.25s cubic-bezier(0.25, 1, 0.5, 1)";
+        resetViewerZoom();
+    }, 200);
 }
 
 async function downloadCurrentPhoto() {
@@ -602,13 +636,25 @@ function updateViewerTransform() {
     viewerZoomText.textContent = `${viewerZoom.toFixed(1)}×`;
 }
 
+function resetViewerTransformSmooth() {
+    viewerImage.style.transition = "transform 0.2s cubic-bezier(0.25, 1, 0.5, 1)";
+    resetViewerZoom();
+}
+
 function setViewerZoom(value) {
     viewerZoom = Math.max(VIEWER_MIN_ZOOM, Math.min(VIEWER_MAX_ZOOM, value));
     updateViewerTransform();
 }
 
-function zoomViewerIn() { setViewerZoom(viewerZoom + 0.5); }
-function zoomViewerOut() { setViewerZoom(viewerZoom - 0.5); }
+function zoomViewerIn() {
+    viewerImage.style.transition = "transform 0.2s ease-out";
+    setViewerZoom(viewerZoom + 0.5);
+}
+
+function zoomViewerOut() {
+    viewerImage.style.transition = "transform 0.2s ease-out";
+    setViewerZoom(viewerZoom - 0.5);
+}
 
 function resetViewerZoom() {
     viewerZoom = 1;
@@ -620,6 +666,8 @@ function resetViewerZoom() {
 // 터치/마우스 스와이프 및 드래그 처리
 photoZoomArea.addEventListener("pointerdown", function(event) {
     if (event.pointerType === "touch" && event.isPrimary === false) return;
+
+    viewerImage.style.transition = "none"; // 드래그 시 트랜지션 해제
 
     if (viewerZoom > 1) {
         viewerDragging = true;
@@ -647,6 +695,17 @@ photoZoomArea.addEventListener("pointermove", function(event) {
     } else if (viewerZoom === 1 && isSwiping) {
         swipeCurrentX = event.clientX;
         const deltaX = swipeCurrentX - swipeStartX;
+
+        const currentIndex = allPhotosList.findIndex(p => p.id === currentPhotoId);
+        const isFirst = currentIndex === 0;
+        const isLast = currentIndex === allPhotosList.length - 1;
+
+        // [핵심 제어] 첫 번째/마지막 사진일 때 스와이프 차단
+        if ((isFirst && deltaX > 0) || (isLast && deltaX < 0)) {
+            viewerImage.style.transform = `translate(0px, 0px) scale(1)`;
+            return;
+        }
+
         viewerImage.style.transform = `translate(${deltaX}px, 0px) scale(1)`;
     }
 });
@@ -657,14 +716,18 @@ function handleSwipeEnd() {
     } else if (isSwiping) {
         isSwiping = false;
         const deltaX = swipeCurrentX - swipeStartX;
-        const threshold = 50;
+        const threshold = 60; // 스와이프 인식 거리(px)
 
-        if (deltaX < -threshold) {
-            navigatePhoto(1);  // 다음 사진
-        } else if (deltaX > threshold) {
-            navigatePhoto(-1); // 이전 사진
+        const currentIndex = allPhotosList.findIndex(p => p.id === currentPhotoId);
+        const isFirst = currentIndex === 0;
+        const isLast = currentIndex === allPhotosList.length - 1;
+
+        if (deltaX < -threshold && !isLast) {
+            navigatePhoto(1);  // 다음 사진으로 이동
+        } else if (deltaX > threshold && !isFirst) {
+            navigatePhoto(-1); // 이전 사진으로 이동
         } else {
-            updateViewerTransform();
+            resetViewerTransformSmooth(); // 경계선이거나 유효거리가 안되면 제자리 복귀
         }
     }
 }
@@ -677,6 +740,7 @@ photoZoomArea.addEventListener("touchstart", function(event) {
     if (event.touches.length !== 2) return;
     event.preventDefault();
     isSwiping = false;
+    viewerImage.style.transition = "none";
     viewerPinchStartDistance = getDistance(event.touches[0], event.touches[1]);
     viewerPinchStartZoom = viewerZoom;
 }, { passive: false });
@@ -755,7 +819,7 @@ galleryButton.addEventListener("click", openGallery);
 galleryBackButton.addEventListener("click", returnToCamera);
 retryCameraButton.addEventListener("click", startCamera);
 
-// 촬영 및 연사 (마우스 & 터치 이벤트 통합)
+// 촬영 및 연사 (마우스 & 터치 이벤트)
 captureButton.addEventListener("mousedown", handleCaptureStart);
 captureButton.addEventListener("mouseup", handleCaptureEnd);
 captureButton.addEventListener("mouseleave", handleCaptureEnd);
