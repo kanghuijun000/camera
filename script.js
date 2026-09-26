@@ -158,7 +158,7 @@ function deleteAllPhotosFromDatabase() {
 
 
 /* =========================================================
-   카메라 제어
+   카메라 제어 (전면/후면 전환 및 거울모드 제어)
 ========================================================= */
 
 async function startCamera() {
@@ -184,6 +184,7 @@ async function startCamera() {
         cameraTrack = cameraStream.getVideoTracks()[0];
         cameraEnabled = true;
 
+        // 전면 카메라 사용 시 미리보기 화면 좌우 반전 클래스 제어
         if (currentFacingMode === "user") {
             cameraPreview.classList.add("mirror");
         } else {
@@ -261,7 +262,7 @@ function hideCameraError() {
 
 
 /* =========================================================
-   카메라 줌 (수정: 실시간 상단 배율 텍스트 동기화)
+   카메라 줌
 ========================================================= */
 
 function setupCameraZoom() {
@@ -282,14 +283,12 @@ function setupCameraZoom() {
 }
 
 function updateCameraZoomUI() {
-    // 1. 하드웨어 줌 미지원 시 CSS scale 적용
-    if (!cameraHardwareZoom) {
-        cameraPreview.style.transform = `scale(${cameraZoom})`;
-    } else {
-        cameraPreview.style.transform = "scale(1)";
-    }
+    const scaleTransform = !cameraHardwareZoom ? `scale(${cameraZoom})` : "scale(1)";
+    const mirrorTransform = currentFacingMode === "user" ? "scaleX(-1)" : "";
 
-    // 2. 상단 줌 배율 텍스트 변경
+    // scale 변형과 거울모드 transform을 결합
+    cameraPreview.style.transform = `${scaleTransform} ${mirrorTransform}`.trim();
+
     if (cameraZoomIndicator) {
         cameraZoomIndicator.textContent = `${cameraZoom.toFixed(1)}×`;
     }
@@ -335,8 +334,6 @@ cameraPreview.addEventListener("touchmove", function(event) {
 
     const currentDistance = getDistance(event.touches[0], event.touches[1]);
     const ratio = currentDistance / cameraPinchStartDistance;
-    
-    // 핀치 실시간 반영
     applyCameraZoom(cameraPinchStartZoom * ratio);
 }, { passive: false });
 
@@ -346,7 +343,7 @@ cameraPreview.addEventListener("touchend", function(event) {
 
 
 /* =========================================================
-   촬영
+   촬영 (전면 카메라 좌우반전 보정 반영)
 ========================================================= */
 
 async function capturePhoto() {
@@ -373,6 +370,7 @@ async function capturePhoto() {
     canvas.height = sourceHeight;
     const context = canvas.getContext("2d");
 
+    // 전면 셀카 촬영 시 미리보기 화면과 완벽 일치하도록 가로좌우 반전 처리
     if (currentFacingMode === "user") {
         context.translate(canvas.width, 0);
         context.scale(-1, 1);
@@ -451,7 +449,7 @@ async function loadGallery() {
 
 
 /* =========================================================
-   사진 뷰어 & 휴대폰 저장 (수정: 모바일 저장 보완)
+   사진 뷰어 & 휴대폰 저장
 ========================================================= */
 
 async function openPhotoViewer(id) {
@@ -481,7 +479,6 @@ function closePhotoViewer() {
     resetViewerZoom();
 }
 
-// 휴대폰/기기 저장 기능 (FileReader로 DataURL 기반 다운로드)
 async function downloadCurrentPhoto() {
     if (!currentPhotoId) return;
 
@@ -503,10 +500,9 @@ async function downloadCurrentPhoto() {
 
 
 /* =========================================================
-   갤러리 사진 줌 및 범위(경계선) 제한 구현
+   갤러리 사진 줌 및 범위(경계선) 제한
 ========================================================= */
 
-// 이동 제한 계산 알고리즘
 function clampViewerPosition() {
     if (viewerZoom <= 1) {
         viewerPositionX = 0;
@@ -522,11 +518,9 @@ function clampViewerPosition() {
 
     if (!imgWidth || !imgHeight) return;
 
-    // 확대된 실제 이미지의 폭과 높이
     const scaledWidth = imgWidth * viewerZoom;
     const scaledHeight = imgHeight * viewerZoom;
 
-    // 이미지의 가로/세로 이동 가능 범위 계산
     const maxX = Math.max(0, (scaledWidth - containerWidth) / 2);
     const maxY = Math.max(0, (scaledHeight - containerHeight) / 2);
 
