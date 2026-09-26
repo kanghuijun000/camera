@@ -57,10 +57,11 @@ let db = null;
 let currentPhotoId = null;
 let currentPhotoURL = null;
 let galleryObjectURLs = [];
+let allPhotosList = []; // 갤러리 내 사진 순서 유지용 배열
 
 
 /* =========================================================
-   갤러리 사진 줌/이동 변수
+   갤러리 사진 줌/이동/스와이프 변수
 ========================================================= */
 
 let viewerZoom = 1;
@@ -75,6 +76,12 @@ let viewerOriginX = 0;
 let viewerOriginY = 0;
 let viewerPinchStartDistance = 0;
 let viewerPinchStartZoom = 1;
+
+// 좌우 스와이프 넘기기 관련 변수
+let swipeStartX = 0;
+let swipeStartY = 0;
+let swipeCurrentX = 0;
+let isSwiping = false;
 
 
 /* =========================================================
@@ -174,10 +181,8 @@ async function startCamera() {
         cameraStream = await navigator.mediaDevices.getUserMedia({
             video: {
                 facingMode: { ideal: currentFacingMode },
-                // 1. 최대 해상도(4K/FHD) 우선 요청
                 width: { min: 1280, ideal: 3840, max: 3840 },
                 height: { min: 720, ideal: 2160, max: 2160 },
-                // 2. 센서 노출 안정화를 위한 프레임 레이트 고정
                 frameRate: { ideal: 30, max: 60 }
             },
             audio: false
@@ -338,7 +343,7 @@ cameraPreview.addEventListener("touchend", function(event) {
 
 
 /* =========================================================
-   촬영 (품질 100% 저장 설정)
+   촬영
 ========================================================= */
 
 async function capturePhoto() {
@@ -365,7 +370,6 @@ async function capturePhoto() {
     canvas.height = sourceHeight;
     const context = canvas.getContext("2d");
 
-    // 캔버스 랜더링 렌더링 힌트 설정 (고화질)
     context.imageSmoothingEnabled = true;
     context.imageSmoothingQuality = "high";
 
@@ -380,7 +384,6 @@ async function capturePhoto() {
         0, 0, canvas.width, canvas.height
     );
 
-    // 손실 없는 최상 품질(1.0)로 이미지 생성
     canvas.toBlob(async function(blob) {
         if (!blob) return;
 
@@ -424,11 +427,13 @@ async function loadGallery() {
 
     if (photos.length === 0) {
         emptyGallery.classList.remove("hidden");
+        allPhotosList = [];
         return;
     }
 
     emptyGallery.classList.add("hidden");
     photos.sort((a, b) => b.date - a.date);
+    allPhotosList = photos; // 전체 사진 목록 보관
 
     photos.forEach(photo => {
         const item = document.createElement("div");
@@ -448,7 +453,7 @@ async function loadGallery() {
 
 
 /* =========================================================
-   사진 뷰어 & 휴대폰 저장
+   사진 뷰어 & 이전/다음 사진 이동 (좌우 스와이프 기능)
 ========================================================= */
 
 async function openPhotoViewer(id) {
@@ -478,6 +483,19 @@ function closePhotoViewer() {
     resetViewerZoom();
 }
 
+function navigatePhoto(direction) {
+    if (!currentPhotoId || allPhotosList.length <= 1) return;
+
+    const currentIndex = allPhotosList.findIndex(p => p.id === currentPhotoId);
+    if (currentIndex === -1) return;
+
+    let targetIndex = currentIndex + direction;
+
+    if (targetIndex >= 0 && targetIndex < allPhotosList.length) {
+        openPhotoViewer(allPhotosList[targetIndex].id);
+    }
+}
+
 async function downloadCurrentPhoto() {
     if (!currentPhotoId) return;
 
@@ -499,7 +517,7 @@ async function downloadCurrentPhoto() {
 
 
 /* =========================================================
-   갤러리 사진 줌 및 범위 제한
+   갤러리 사진 줌, 이동 및 좌우 스와이프 구현
 ========================================================= */
 
 function clampViewerPosition() {
@@ -548,31 +566,68 @@ function resetViewerZoom() {
     updateViewerTransform();
 }
 
+// 터치/마우스 스와이프 및 드래그 처리
 photoZoomArea.addEventListener("pointerdown", function(event) {
-    if (viewerZoom <= 1) return;
-    viewerDragging = true;
-    viewerDragStartX = event.clientX;
-    viewerDragStartY = event.clientY;
-    viewerOriginX = viewerPositionX;
-    viewerOriginY = viewerPositionY;
+    if (event.pointerType === "touch" && event.isPrimary === false) return;
+
+    if (viewerZoom > 1) {
+        // 확대 시: 이미지 드래그 이동
+        viewerDragging = true;
+        viewerDragStartX = event.clientX;
+        viewerDragStartY = event.clientY;
+        viewerOriginX = viewerPositionX;
+        viewerOriginY = viewerPositionY;
+    } else {
+        // 배율 1x일 때: 좌우 스와이프 동작 감지 준비
+        isSwiping = true;
+        swipeStartX = event.clientX;
+        swipeStartY = event.clientY;
+        swipeCurrentX = event.clientX;
+    }
+
     photoZoomArea.setPointerCapture(event.pointerId);
 });
 
 photoZoomArea.addEventListener("pointermove", function(event) {
-    if (!viewerDragging) return;
-    const dx = event.clientX - viewerDragStartX;
-    const dy = event.clientY - viewerDragStartY;
-    viewerPositionX = viewerOriginX + dx;
-    viewerPositionY = viewerOriginY + dy;
-    updateViewerTransform();
+    if (viewerZoom > 1 && viewerDragging) {
+        const dx = event.clientX - viewerDragStartX;
+        const dy = event.clientY - viewerDragStartY;
+        viewerPositionX = viewerOriginX + dx;
+        viewerPositionY = viewerOriginY + dy;
+        updateViewerTransform();
+    } else if (viewerZoom === 1 && isSwiping) {
+        swipeCurrentX = event.clientX;
+        const deltaX = swipeCurrentX - swipeStartX;
+        viewerImage.style.transform = `translate(${deltaX}px, 0px) scale(1)`;
+    }
 });
 
-photoZoomArea.addEventListener("pointerup", () => { viewerDragging = false; });
-photoZoomArea.addEventListener("pointercancel", () => { viewerDragging = false; });
+function handleSwipeEnd() {
+    if (viewerZoom > 1) {
+        viewerDragging = false;
+    } else if (isSwiping) {
+        isSwiping = false;
+        const deltaX = swipeCurrentX - swipeStartX;
+        const threshold = 50; // 넘김 감지 최소 거리 (px)
 
+        if (deltaX < -threshold) {
+            navigatePhoto(1); // 오른쪽에서 왼쪽 스와이프 -> 다음 사진
+        } else if (deltaX > threshold) {
+            navigatePhoto(-1); // 왼쪽에서 오른쪽 스와이프 -> 이전 사진
+        } else {
+            updateViewerTransform(); // 제자리 복귀
+        }
+    }
+}
+
+photoZoomArea.addEventListener("pointerup", handleSwipeEnd);
+photoZoomArea.addEventListener("pointercancel", handleSwipeEnd);
+
+// 핀치 줌 처리
 photoZoomArea.addEventListener("touchstart", function(event) {
     if (event.touches.length !== 2) return;
     event.preventDefault();
+    isSwiping = false;
     viewerPinchStartDistance = getDistance(event.touches[0], event.touches[1]);
     viewerPinchStartZoom = viewerZoom;
 }, { passive: false });
@@ -587,6 +642,19 @@ photoZoomArea.addEventListener("touchmove", function(event) {
 
 photoZoomArea.addEventListener("touchend", function(event) {
     if (event.touches.length < 2) viewerPinchStartDistance = 0;
+});
+
+// 키보드 좌/우 방향키로 사진 넘기기 지원
+window.addEventListener("keydown", function(event) {
+    if (photoViewer.classList.contains("hidden")) return;
+
+    if (event.key === "ArrowLeft") {
+        navigatePhoto(-1);
+    } else if (event.key === "ArrowRight") {
+        navigatePhoto(1);
+    } else if (event.key === "Escape") {
+        closePhotoViewer();
+    }
 });
 
 
