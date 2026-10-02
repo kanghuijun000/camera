@@ -62,13 +62,13 @@ const reusableContext = reusableCanvas.getContext("2d", { alpha: false });
 let burstBitmapQueue = [];
 
 // 연사(Long Press) 관련 변수
-let burstTimer = null;         // 누름 감지 타이머
-let burstInterval = null;      // 연사 실행 간격 타이머
-let isBurstMode = false;       // 연사 모드 활성화 여부
-let burstCount = 0;            // 현재 연사 장수 카운터
-const MAX_BURST_COUNT = 30;    // 최대 연사 장수 제한
-const BURST_THRESHOLD = 200;   // 0.2초 이상 누르면 연사 시작
-const BURST_INTERVAL = 150;    // 0.15초 간격 촬영
+let burstTimer = null;
+let burstInterval = null;
+let isBurstMode = false;
+let burstCount = 0;
+const MAX_BURST_COUNT = 30;
+const BURST_THRESHOLD = 200;
+const BURST_INTERVAL = 150;
 
 
 /* =========================================================
@@ -132,7 +132,10 @@ function openDatabase() {
         request.onupgradeneeded = function(event) {
             const database = event.target.result;
             if (!database.objectStoreNames.contains("photos")) {
-                database.createObjectStore("photos", { keyPath: "id", autoIncrement: true });
+                database.createObjectStore("photos", {
+                    keyPath: "id",
+                    autoIncrement: true
+                });
             }
         };
 
@@ -149,7 +152,10 @@ function savePhoto(blob) {
     return new Promise((resolve, reject) => {
         const transaction = db.transaction("photos", "readwrite");
         const store = transaction.objectStore("photos");
-        const request = store.add({ blob: blob, date: Date.now() });
+        const request = store.add({
+            blob: blob,
+            date: Date.now()
+        });
 
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
@@ -217,10 +223,23 @@ async function startCamera() {
     try {
         cameraStream = await navigator.mediaDevices.getUserMedia({
             video: {
-                facingMode: { ideal: currentFacingMode },
-                width: { min: 1280, ideal: 3840, max: 3840 },
-                height: { min: 720, ideal: 2160, max: 2160 },
-                frameRate: { ideal: 30, max: 60 }
+                facingMode: {
+                    ideal: currentFacingMode
+                },
+                width: {
+                    min: 1280,
+                    ideal: 3840,
+                    max: 3840
+                },
+                height: {
+                    min: 720,
+                    ideal: 2160,
+                    max: 2160
+                },
+                frameRate: {
+                    ideal: 30,
+                    max: 60
+                }
             },
             audio: false
         });
@@ -245,7 +264,9 @@ async function startCamera() {
         cameraEnabled = false;
         cameraUI.classList.add("hidden");
         cameraOffScreen.classList.remove("hidden");
-        showCameraError("카메라를 사용할 수 없습니다. 카메라 권한을 확인해주세요.");
+        showCameraError(
+            "카메라를 사용할 수 없습니다. 카메라 권한을 확인해주세요."
+        );
     }
 }
 
@@ -285,7 +306,12 @@ async function toggleCamera() {
 
 async function switchCamera() {
     if (!cameraEnabled) return;
-    currentFacingMode = currentFacingMode === "environment" ? "user" : "environment";
+
+    currentFacingMode =
+        currentFacingMode === "environment"
+            ? "user"
+            : "environment";
+
     await startCamera();
 }
 
@@ -307,18 +333,27 @@ function setupCameraZoom() {
     cameraHardwareZoom = false;
     cameraZoom = 1;
 
-    if (!cameraTrack || typeof cameraTrack.getCapabilities !== "function") {
+    if (
+        !cameraTrack ||
+        typeof cameraTrack.getCapabilities !== "function"
+    ) {
         updateCameraZoomUI();
         return;
     }
 
     try {
         const capabilities = cameraTrack.getCapabilities();
-        if (capabilities.zoom && capabilities.zoom.min !== undefined && capabilities.zoom.max !== undefined) {
+
+        if (
+            capabilities.zoom &&
+            capabilities.zoom.min !== undefined &&
+            capabilities.zoom.max !== undefined
+        ) {
             cameraHardwareZoom = true;
 
             if (typeof cameraTrack.getSettings === "function") {
                 const settings = cameraTrack.getSettings();
+
                 if (typeof settings.zoom === "number") {
                     cameraZoom = Math.max(
                         CAMERA_MIN_ZOOM,
@@ -336,35 +371,56 @@ function setupCameraZoom() {
 
 function updateCameraZoomUI() {
     const scaleFactor = !cameraHardwareZoom ? cameraZoom : 1;
-    const mirrorFactor = (currentFacingMode === "user") ? -1 : 1;
+    const mirrorFactor =
+        currentFacingMode === "user" ? -1 : 1;
 
-    cameraPreview.style.transform = `scale(${scaleFactor * mirrorFactor}, ${scaleFactor})`;
+    cameraPreview.style.transform =
+        `scale(${scaleFactor * mirrorFactor}, ${scaleFactor})`;
 
     if (cameraZoomIndicator) {
-        cameraZoomIndicator.textContent = `${cameraZoom.toFixed(1)}×`;
+        cameraZoomIndicator.textContent =
+            `${cameraZoom.toFixed(1)}×`;
     }
 }
 
 async function applyCameraZoom(value) {
-    cameraZoom = Math.max(CAMERA_MIN_ZOOM, Math.min(CAMERA_MAX_ZOOM, value));
+    cameraZoom = Math.max(
+        CAMERA_MIN_ZOOM,
+        Math.min(CAMERA_MAX_ZOOM, value)
+    );
 
     if (cameraHardwareZoom && cameraTrack) {
         try {
             const capabilities = cameraTrack.getCapabilities();
             const min = capabilities.zoom.min;
-            const max = Math.min(capabilities.zoom.max, CAMERA_MAX_ZOOM);
-            const actualZoom = Math.max(min, Math.min(max, cameraZoom));
+            const max = Math.min(
+                capabilities.zoom.max,
+                CAMERA_MAX_ZOOM
+            );
+
+            const actualZoom = Math.max(
+                min,
+                Math.min(max, cameraZoom)
+            );
 
             await cameraTrack.applyConstraints({
-                advanced: [{ zoom: actualZoom }]
+                advanced: [
+                    {
+                        zoom: actualZoom
+                    }
+                ]
             });
 
             if (typeof cameraTrack.getSettings === "function") {
                 const settings = cameraTrack.getSettings();
+
                 if (typeof settings.zoom === "number") {
                     cameraZoom = Math.max(
                         CAMERA_MIN_ZOOM,
-                        Math.min(CAMERA_MAX_ZOOM, settings.zoom)
+                        Math.min(
+                            CAMERA_MAX_ZOOM,
+                            settings.zoom
+                        )
                     );
                 }
             }
@@ -380,37 +436,90 @@ async function applyCameraZoom(value) {
 function getDistance(touch1, touch2) {
     const dx = touch1.clientX - touch2.clientX;
     const dy = touch1.clientY - touch2.clientY;
+
     return Math.sqrt(dx * dx + dy * dy);
 }
 
-cameraPreview.addEventListener("touchstart", function(event) {
-    if (!cameraEnabled || event.touches.length !== 2) return;
-    event.preventDefault();
-    cameraPinchStartDistance = getDistance(event.touches[0], event.touches[1]);
-    cameraPinchStartZoom = cameraZoom;
-}, { passive: false });
+cameraPreview.addEventListener(
+    "touchstart",
+    function(event) {
+        if (
+            !cameraEnabled ||
+            event.touches.length !== 2
+        ) {
+            return;
+        }
 
-cameraPreview.addEventListener("touchmove", function(event) {
-    if (!cameraEnabled || event.touches.length !== 2 || cameraPinchStartDistance <= 0) return;
-    event.preventDefault();
+        event.preventDefault();
 
-    const currentDistance = getDistance(event.touches[0], event.touches[1]);
-    const ratio = currentDistance / cameraPinchStartDistance;
-    applyCameraZoom(cameraPinchStartZoom * ratio);
-}, { passive: false });
+        cameraPinchStartDistance =
+            getDistance(
+                event.touches[0],
+                event.touches[1]
+            );
 
-cameraPreview.addEventListener("touchend", function(event) {
-    if (event.touches.length < 2) cameraPinchStartDistance = 0;
-});
+        cameraPinchStartZoom = cameraZoom;
+    },
+    {
+        passive: false
+    }
+);
+
+cameraPreview.addEventListener(
+    "touchmove",
+    function(event) {
+        if (
+            !cameraEnabled ||
+            event.touches.length !== 2 ||
+            cameraPinchStartDistance <= 0
+        ) {
+            return;
+        }
+
+        event.preventDefault();
+
+        const currentDistance =
+            getDistance(
+                event.touches[0],
+                event.touches[1]
+            );
+
+        const ratio =
+            currentDistance /
+            cameraPinchStartDistance;
+
+        applyCameraZoom(
+            cameraPinchStartZoom * ratio
+        );
+    },
+    {
+        passive: false
+    }
+);
+
+cameraPreview.addEventListener(
+    "touchend",
+    function(event) {
+        if (event.touches.length < 2) {
+            cameraPinchStartDistance = 0;
+        }
+    }
+);
 
 
 /* =========================================================
-   촬영 및 연사 (속도 고속화 & 저장 동기화)
+   촬영 및 연사
 ========================================================= */
 
 // 단발 캡처
 async function capturePhoto() {
-    if (!cameraEnabled || !cameraStream || !cameraPreview.videoWidth) return;
+    if (
+        !cameraEnabled ||
+        !cameraStream ||
+        !cameraPreview.videoWidth
+    ) {
+        return;
+    }
 
     const videoWidth = cameraPreview.videoWidth;
     const videoHeight = cameraPreview.videoHeight;
@@ -422,10 +531,15 @@ async function capturePhoto() {
 
     if (!cameraHardwareZoom && cameraZoom > 1) {
         const cropRatio = 1 / cameraZoom;
+
         sourceWidth = videoWidth * cropRatio;
         sourceHeight = videoHeight * cropRatio;
-        sourceX = (videoWidth - sourceWidth) / 2;
-        sourceY = (videoHeight - sourceHeight) / 2;
+
+        sourceX =
+            (videoWidth - sourceWidth) / 2;
+
+        sourceY =
+            (videoHeight - sourceHeight) / 2;
     }
 
     reusableCanvas.width = sourceWidth;
@@ -436,14 +550,23 @@ async function capturePhoto() {
 
     if (currentFacingMode === "user") {
         reusableContext.save();
-        reusableContext.translate(reusableCanvas.width, 0);
+        reusableContext.translate(
+            reusableCanvas.width,
+            0
+        );
         reusableContext.scale(-1, 1);
     }
 
     reusableContext.drawImage(
         cameraPreview,
-        sourceX, sourceY, sourceWidth, sourceHeight,
-        0, 0, reusableCanvas.width, reusableCanvas.height
+        sourceX,
+        sourceY,
+        sourceWidth,
+        sourceHeight,
+        0,
+        0,
+        reusableCanvas.width,
+        reusableCanvas.height
     );
 
     if (currentFacingMode === "user") {
@@ -451,42 +574,73 @@ async function capturePhoto() {
     }
 
     isSavingPhotos = true;
+
     savingPromise = new Promise((resolve) => {
-        reusableCanvas.toBlob(async function(blob) {
-            if (blob) {
-                try {
-                    await savePhoto(blob);
-                    cameraPreview.style.opacity = "0.4";
-                    setTimeout(() => { cameraPreview.style.opacity = "1"; }, 80);
-                } catch (error) {
-                    console.error("사진 저장 실패", error);
+        reusableCanvas.toBlob(
+            async function(blob) {
+                if (blob) {
+                    try {
+                        await savePhoto(blob);
+
+                        cameraPreview.style.opacity = "0.4";
+
+                        setTimeout(() => {
+                            cameraPreview.style.opacity = "1";
+                        }, 80);
+
+                    } catch (error) {
+                        console.error(
+                            "사진 저장 실패",
+                            error
+                        );
+                    }
                 }
-            }
-            isSavingPhotos = false;
-            resolve();
-        }, "image/jpeg", 1.0);
+
+                isSavingPhotos = false;
+                resolve();
+            },
+            "image/jpeg",
+            1.0
+        );
     });
 
     await savingPromise;
 }
 
+
 // 연사 프레임 비트맵 저장
 async function captureBurstFrame() {
-    if (!cameraEnabled || !cameraStream || !cameraPreview.videoWidth) return;
+    if (
+        !cameraEnabled ||
+        !cameraStream ||
+        !cameraPreview.videoWidth
+    ) {
+        return;
+    }
+
     try {
-        const bitmap = await createImageBitmap(cameraPreview);
+        const bitmap =
+            await createImageBitmap(cameraPreview);
+
         burstBitmapQueue.push({
             bitmap: bitmap,
             zoom: cameraZoom,
             facingMode: currentFacingMode
         });
+
     } catch (e) {
-        console.error("비트맵 캡처 실패", e);
+        console.error(
+            "비트맵 캡처 실패",
+            e
+        );
     }
 }
 
 function handleCaptureStart(event) {
-    if (event.cancelable) event.preventDefault();
+    if (event.cancelable) {
+        event.preventDefault();
+    }
+
     if (!cameraEnabled) return;
 
     isBurstMode = false;
@@ -498,7 +652,9 @@ function handleCaptureStart(event) {
 }
 
 function handleCaptureEnd(event) {
-    if (event && event.cancelable) event.preventDefault();
+    if (event && event.cancelable) {
+        event.preventDefault();
+    }
 
     clearTimeout(burstTimer);
     burstTimer = null;
@@ -517,8 +673,10 @@ function startBurstCapture() {
     burstBitmapQueue = [];
 
     if (burstCounter) {
-        burstCounter.textContent = `0/${MAX_BURST_COUNT}`;
-        burstCounter.style.display = 'block';
+        burstCounter.textContent =
+            `0/${MAX_BURST_COUNT}`;
+
+        burstCounter.style.display = "block";
     }
 
     const executeCapture = () => {
@@ -526,15 +684,24 @@ function startBurstCapture() {
             stopBurstCapture();
             return;
         }
+
         burstCount++;
+
         if (burstCounter) {
-            burstCounter.textContent = `${burstCount}/${MAX_BURST_COUNT}`;
+            burstCounter.textContent =
+                `${burstCount}/${MAX_BURST_COUNT}`;
         }
+
         captureBurstFrame();
     };
 
     executeCapture();
-    burstInterval = setInterval(executeCapture, BURST_INTERVAL);
+
+    burstInterval =
+        setInterval(
+            executeCapture,
+            BURST_INTERVAL
+        );
 }
 
 async function stopBurstCapture() {
@@ -544,28 +711,47 @@ async function stopBurstCapture() {
     }
 
     if (burstCounter) {
-        burstCounter.style.display = 'none';
+        burstCounter.style.display = "none";
     }
 
     if (burstBitmapQueue.length > 0) {
-        const queueToProcess = [...burstBitmapQueue];
+        const queueToProcess =
+            [...burstBitmapQueue];
+
         burstBitmapQueue = [];
-        
+
         isSavingPhotos = true;
-        savingPromise = processAndSaveBurstQueue(queueToProcess).then(() => {
-            isSavingPhotos = false;
-        });
+
+        savingPromise =
+            processAndSaveBurstQueue(
+                queueToProcess
+            ).then(() => {
+                isSavingPhotos = false;
+            });
     }
 }
+
 
 // 연사 고속 병렬 변환 & DB 저장
 async function processAndSaveBurstQueue(queue) {
     const saveTasks = queue.map((item) => {
         return new Promise(async (resolve) => {
-            const { bitmap, zoom, facingMode } = item;
+            const {
+                bitmap,
+                zoom,
+                facingMode
+            } = item;
 
-            const canvas = document.createElement("canvas");
-            const ctx = canvas.getContext("2d", { alpha: false });
+            const canvas =
+                document.createElement("canvas");
+
+            const ctx =
+                canvas.getContext(
+                    "2d",
+                    {
+                        alpha: false
+                    }
+                );
 
             const videoWidth = bitmap.width;
             const videoHeight = bitmap.height;
@@ -575,12 +761,23 @@ async function processAndSaveBurstQueue(queue) {
             let sourceX = 0;
             let sourceY = 0;
 
-            if (!cameraHardwareZoom && zoom > 1) {
+            if (
+                !cameraHardwareZoom &&
+                zoom > 1
+            ) {
                 const cropRatio = 1 / zoom;
-                sourceWidth = videoWidth * cropRatio;
-                sourceHeight = videoHeight * cropRatio;
-                sourceX = (videoWidth - sourceWidth) / 2;
-                sourceY = (videoHeight - sourceHeight) / 2;
+
+                sourceWidth =
+                    videoWidth * cropRatio;
+
+                sourceHeight =
+                    videoHeight * cropRatio;
+
+                sourceX =
+                    (videoWidth - sourceWidth) / 2;
+
+                sourceY =
+                    (videoHeight - sourceHeight) / 2;
             }
 
             canvas.width = sourceWidth;
@@ -588,14 +785,25 @@ async function processAndSaveBurstQueue(queue) {
 
             if (facingMode === "user") {
                 ctx.save();
-                ctx.translate(canvas.width, 0);
+
+                ctx.translate(
+                    canvas.width,
+                    0
+                );
+
                 ctx.scale(-1, 1);
             }
 
             ctx.drawImage(
                 bitmap,
-                sourceX, sourceY, sourceWidth, sourceHeight,
-                0, 0, canvas.width, canvas.height
+                sourceX,
+                sourceY,
+                sourceWidth,
+                sourceHeight,
+                0,
+                0,
+                canvas.width,
+                canvas.height
             );
 
             if (facingMode === "user") {
@@ -604,12 +812,17 @@ async function processAndSaveBurstQueue(queue) {
 
             bitmap.close();
 
-            canvas.toBlob(async (blob) => {
-                if (blob) {
-                    await savePhoto(blob);
-                }
-                resolve();
-            }, "image/jpeg", 1.0);
+            canvas.toBlob(
+                async (blob) => {
+                    if (blob) {
+                        await savePhoto(blob);
+                    }
+
+                    resolve();
+                },
+                "image/jpeg",
+                1.0
+            );
         });
     });
 
@@ -618,174 +831,293 @@ async function processAndSaveBurstQueue(queue) {
 
 
 /* =========================================================
-   갤러리 화면 (저장 동기화 및 즉시 반영 보완)
+   갤러리 화면
 ========================================================= */
 
 function clearGalleryObjectURLs() {
-    galleryObjectURLs.forEach(url => URL.revokeObjectURL(url));
+    galleryObjectURLs.forEach(
+        url => URL.revokeObjectURL(url)
+    );
+
     galleryObjectURLs = [];
 }
 
 async function openGallery() {
     cameraScreen.classList.remove("active");
     galleryScreen.classList.add("active");
+
     await loadGallery();
 }
 
 function returnToCamera() {
     galleryScreen.classList.remove("active");
     cameraScreen.classList.add("active");
+
     clearGalleryObjectURLs();
 }
 
 async function loadGallery() {
     clearGalleryObjectURLs();
+
     galleryGrid.innerHTML = "";
 
-    // 여전히 저장이 진행 중이라면 동기화 대기
     if (isSavingPhotos && savingPromise) {
         emptyIcon.textContent = "⏳";
-        emptyText.textContent = "촬영한 사진을 저장하는 중입니다...";
-        emptyGallery.classList.remove("hidden");
-        
+        emptyText.textContent =
+            "촬영한 사진을 저장하는 중입니다...";
+
+        emptyGallery.classList.remove(
+            "hidden"
+        );
+
         await savingPromise;
     }
 
-    const photos = await getAllPhotos();
+    const photos =
+        await getAllPhotos();
 
     if (photos.length === 0) {
         emptyIcon.textContent = "📷";
-        emptyText.textContent = "저장된 사진이 없습니다.";
-        emptyGallery.classList.remove("hidden");
+        emptyText.textContent =
+            "저장된 사진이 없습니다.";
+
+        emptyGallery.classList.remove(
+            "hidden"
+        );
+
         allPhotosList = [];
+
         return;
     }
 
     emptyGallery.classList.add("hidden");
-    photos.sort((a, b) => b.date - a.date);
+
+    photos.sort(
+        (a, b) => b.date - a.date
+    );
+
     allPhotosList = photos;
 
     photos.forEach(photo => {
-        const item = document.createElement("div");
-        item.className = "gallery-item";
+        const item =
+            document.createElement("div");
 
-        const image = document.createElement("img");
-        const url = URL.createObjectURL(photo.blob);
+        item.className =
+            "gallery-item";
+
+        const image =
+            document.createElement("img");
+
+        const url =
+            URL.createObjectURL(
+                photo.blob
+            );
+
         galleryObjectURLs.push(url);
 
         image.src = url;
+
         item.appendChild(image);
 
-        item.addEventListener("click", () => openPhotoViewer(photo.id));
+        item.addEventListener(
+            "click",
+            () => openPhotoViewer(photo.id)
+        );
+
         galleryGrid.appendChild(item);
     });
 }
 
 
 /* =========================================================
-   사진 뷰어 & 검은 공백 없는 연속 넘기기
+   사진 뷰어
 ========================================================= */
 
 async function openPhotoViewer(id) {
-    const photo = await getPhoto(id);
+    const photo =
+        await getPhoto(id);
+
     if (!photo) return;
 
     currentPhotoId = id;
-    if (currentPhotoURL) URL.revokeObjectURL(currentPhotoURL);
 
-    currentPhotoURL = URL.createObjectURL(photo.blob);
-    
+    if (currentPhotoURL) {
+        URL.revokeObjectURL(
+            currentPhotoURL
+        );
+    }
+
+    currentPhotoURL =
+        URL.createObjectURL(
+            photo.blob
+        );
+
     viewerImage.style.transition = "none";
     viewerImage.src = currentPhotoURL;
+
     viewerRotation = 0;
 
     resetViewerZoom();
-    photoViewer.classList.remove("hidden");
+
+    photoViewer.classList.remove(
+        "hidden"
+    );
 }
 
 function closePhotoViewer() {
-    photoViewer.classList.add("hidden");
+    photoViewer.classList.add(
+        "hidden"
+    );
 
     if (currentPhotoURL) {
-        URL.revokeObjectURL(currentPhotoURL);
+        URL.revokeObjectURL(
+            currentPhotoURL
+        );
+
         currentPhotoURL = null;
     }
 
     if (adjacentPhotoURL) {
-        URL.revokeObjectURL(adjacentPhotoURL);
+        URL.revokeObjectURL(
+            adjacentPhotoURL
+        );
+
         adjacentPhotoURL = null;
     }
 
     viewerImage.style.transition = "none";
     viewerImage.src = "";
+
     adjacentImage.style.display = "none";
     adjacentImage.src = "";
+
     currentPhotoId = null;
+
     viewerRotation = 0;
+
     resetViewerZoom();
 }
 
 function navigatePhoto(direction) {
-    if (!currentPhotoId || allPhotosList.length <= 1) return;
+    if (
+        !currentPhotoId ||
+        allPhotosList.length <= 1
+    ) {
+        return;
+    }
 
-    const currentIndex = allPhotosList.findIndex(p => p.id === currentPhotoId);
+    const currentIndex =
+        allPhotosList.findIndex(
+            p => p.id === currentPhotoId
+        );
+
     if (currentIndex === -1) return;
 
-    let targetIndex = currentIndex + direction;
+    let targetIndex =
+        currentIndex + direction;
 
-    if (targetIndex < 0 || targetIndex >= allPhotosList.length) {
+    if (
+        targetIndex < 0 ||
+        targetIndex >= allPhotosList.length
+    ) {
         resetViewerTransformSmooth();
         return;
     }
 
-    const nextPhotoId = allPhotosList[targetIndex].id;
-    const windowWidth = window.innerWidth;
+    const nextPhotoId =
+        allPhotosList[targetIndex].id;
+
+    const windowWidth =
+        window.innerWidth;
 
     const duration = 250;
-    viewerImage.style.transition = `transform ${duration}ms cubic-bezier(0.25, 1, 0.5, 1)`;
-    adjacentImage.style.transition = `transform ${duration}ms cubic-bezier(0.25, 1, 0.5, 1)`;
 
-    const mainExitX = direction > 0 ? -windowWidth : windowWidth;
+    viewerImage.style.transition =
+        `transform ${duration}ms cubic-bezier(0.25, 1, 0.5, 1)`;
+
+    adjacentImage.style.transition =
+        `transform ${duration}ms cubic-bezier(0.25, 1, 0.5, 1)`;
+
+    const mainExitX =
+        direction > 0
+            ? -windowWidth
+            : windowWidth;
+
     viewerImage.style.transform =
         `translate(${mainExitX}px, 0px) rotate(${viewerRotation}deg) scale(${getViewerFitScale() * viewerZoom})`;
-    adjacentImage.style.transform = `translate(0px, 0px) scale(1)`;
+
+    adjacentImage.style.transform =
+        "translate(0px, 0px) scale(1)";
 
     setTimeout(async () => {
-        currentPhotoId = nextPhotoId;
-        viewerRotation = 0;
-        if (currentPhotoURL) URL.revokeObjectURL(currentPhotoURL);
+        currentPhotoId =
+            nextPhotoId;
 
-        currentPhotoURL = adjacentPhotoURL;
+        viewerRotation = 0;
+
+        if (currentPhotoURL) {
+            URL.revokeObjectURL(
+                currentPhotoURL
+            );
+        }
+
+        currentPhotoURL =
+            adjacentPhotoURL;
+
         adjacentPhotoURL = null;
-        viewerImage.style.transition = "none";
-        viewerImage.src = currentPhotoURL;
+
+        viewerImage.style.transition =
+            "none";
+
+        viewerImage.src =
+            currentPhotoURL;
+
         viewerImage.style.transform =
             `translate(0px, 0px) rotate(0deg) scale(${getViewerFitScale()})`;
 
-        adjacentImage.style.display = "none";
+        adjacentImage.style.display =
+            "none";
+
         adjacentImage.src = "";
 
         resetViewerZoom();
+
     }, duration);
 }
 
 async function downloadCurrentPhoto() {
     if (!currentPhotoId) return;
 
-    const photo = await getPhoto(currentPhotoId);
+    const photo =
+        await getPhoto(currentPhotoId);
+
     if (!photo || !photo.blob) return;
 
-    const reader = new FileReader();
+    const reader =
+        new FileReader();
+
     reader.onload = function(e) {
-        const dataUrl = e.target.result;
-        const link = document.createElement("a");
+        const dataUrl =
+            e.target.result;
+
+        const link =
+            document.createElement("a");
+
         link.href = dataUrl;
-        link.download = `photo_${Date.now()}.jpg`;
+
+        link.download =
+            `photo_${Date.now()}.jpg`;
+
         document.body.appendChild(link);
+
         link.click();
+
         document.body.removeChild(link);
     };
-    reader.readAsDataURL(photo.blob);
+
+    reader.readAsDataURL(
+        photo.blob
+    );
 }
 
 
@@ -794,18 +1126,39 @@ async function downloadCurrentPhoto() {
 ========================================================= */
 
 function getViewerFitScale() {
-    const containerWidth = photoZoomArea.clientWidth;
-    const containerHeight = photoZoomArea.clientHeight;
-    const imgWidth = viewerImage.offsetWidth;
-    const imgHeight = viewerImage.offsetHeight;
+    const containerWidth =
+        photoZoomArea.clientWidth;
 
-    if (!containerWidth || !containerHeight || !imgWidth || !imgHeight) {
+    const containerHeight =
+        photoZoomArea.clientHeight;
+
+    const imgWidth =
+        viewerImage.offsetWidth;
+
+    const imgHeight =
+        viewerImage.offsetHeight;
+
+    if (
+        !containerWidth ||
+        !containerHeight ||
+        !imgWidth ||
+        !imgHeight
+    ) {
         return 1;
     }
 
-    const isQuarterTurn = Math.abs(viewerRotation) % 180 === 90;
-    const rotatedWidth = isQuarterTurn ? imgHeight : imgWidth;
-    const rotatedHeight = isQuarterTurn ? imgWidth : imgHeight;
+    const isQuarterTurn =
+        Math.abs(viewerRotation) % 180 === 90;
+
+    const rotatedWidth =
+        isQuarterTurn
+            ? imgHeight
+            : imgWidth;
+
+    const rotatedHeight =
+        isQuarterTurn
+            ? imgWidth
+            : imgHeight;
 
     return Math.min(
         1,
@@ -821,238 +1174,549 @@ function clampViewerPosition() {
         return;
     }
 
-    const containerWidth = photoZoomArea.clientWidth;
-    const containerHeight = photoZoomArea.clientHeight;
-    const imgWidth = viewerImage.offsetWidth;
-    const imgHeight = viewerImage.offsetHeight;
+    const containerWidth =
+        photoZoomArea.clientWidth;
+
+    const containerHeight =
+        photoZoomArea.clientHeight;
+
+    const imgWidth =
+        viewerImage.offsetWidth;
+
+    const imgHeight =
+        viewerImage.offsetHeight;
 
     if (!imgWidth || !imgHeight) return;
 
-    const fitScale = getViewerFitScale();
-    const isQuarterTurn = Math.abs(viewerRotation) % 180 === 90;
-    const rotatedWidth = isQuarterTurn ? imgHeight : imgWidth;
-    const rotatedHeight = isQuarterTurn ? imgWidth : imgHeight;
-    const scaledWidth = rotatedWidth * fitScale * viewerZoom;
-    const scaledHeight = rotatedHeight * fitScale * viewerZoom;
+    const fitScale =
+        getViewerFitScale();
 
-    const maxX = Math.max(0, (scaledWidth - containerWidth) / 2);
-    const maxY = Math.max(0, (scaledHeight - containerHeight) / 2);
+    const isQuarterTurn =
+        Math.abs(viewerRotation) % 180 === 90;
 
-    viewerPositionX = Math.max(-maxX, Math.min(maxX, viewerPositionX));
-    viewerPositionY = Math.max(-maxY, Math.min(maxY, viewerPositionY));
+    const rotatedWidth =
+        isQuarterTurn
+            ? imgHeight
+            : imgWidth;
+
+    const rotatedHeight =
+        isQuarterTurn
+            ? imgWidth
+            : imgHeight;
+
+    const scaledWidth =
+        rotatedWidth *
+        fitScale *
+        viewerZoom;
+
+    const scaledHeight =
+        rotatedHeight *
+        fitScale *
+        viewerZoom;
+
+    const maxX =
+        Math.max(
+            0,
+            (scaledWidth - containerWidth) / 2
+        );
+
+    const maxY =
+        Math.max(
+            0,
+            (scaledHeight - containerHeight) / 2
+        );
+
+    viewerPositionX =
+        Math.max(
+            -maxX,
+            Math.min(
+                maxX,
+                viewerPositionX
+            )
+        );
+
+    viewerPositionY =
+        Math.max(
+            -maxY,
+            Math.min(
+                maxY,
+                viewerPositionY
+            )
+        );
 }
 
 function updateViewerTransform() {
     clampViewerPosition();
-    const fitScale = getViewerFitScale();
+
+    const fitScale =
+        getViewerFitScale();
 
     viewerImage.style.transform =
         `translate(${viewerPositionX}px, ${viewerPositionY}px) rotate(${viewerRotation}deg) scale(${fitScale * viewerZoom})`;
 
-    viewerZoomText.textContent = `${viewerZoom.toFixed(1)}×`;
+    viewerZoomText.textContent =
+        `${viewerZoom.toFixed(1)}×`;
 }
 
 function resetViewerTransformSmooth() {
-    viewerImage.style.transition = "transform 0.2s cubic-bezier(0.25, 1, 0.5, 1)";
-    adjacentImage.style.transition = "transform 0.2s cubic-bezier(0.25, 1, 0.5, 1)";
+    viewerImage.style.transition =
+        "transform 0.2s cubic-bezier(0.25, 1, 0.5, 1)";
+
+    adjacentImage.style.transition =
+        "transform 0.2s cubic-bezier(0.25, 1, 0.5, 1)";
 
     viewerImage.style.transform =
         `translate(0px, 0px) rotate(${viewerRotation}deg) scale(${getViewerFitScale() * viewerZoom})`;
 
-    const deltaX = swipeCurrentX - swipeStartX;
-    const windowWidth = window.innerWidth;
+    const deltaX =
+        swipeCurrentX - swipeStartX;
+
+    const windowWidth =
+        window.innerWidth;
 
     if (deltaX < 0) {
-        adjacentImage.style.transform = `translate(${windowWidth}px, 0px) scale(1)`;
+        adjacentImage.style.transform =
+            `translate(${windowWidth}px, 0px) scale(1)`;
     } else {
-        adjacentImage.style.transform = `translate(${-windowWidth}px, 0px) scale(1)`;
+        adjacentImage.style.transform =
+            `translate(${-windowWidth}px, 0px) scale(1)`;
     }
 
     setTimeout(() => {
-        adjacentImage.style.display = "none";
+        adjacentImage.style.display =
+            "none";
+
         resetViewerZoom();
     }, 200);
 }
 
 function setViewerZoom(value) {
-    viewerZoom = Math.max(VIEWER_MIN_ZOOM, Math.min(VIEWER_MAX_ZOOM, value));
+    viewerZoom =
+        Math.max(
+            VIEWER_MIN_ZOOM,
+            Math.min(
+                VIEWER_MAX_ZOOM,
+                value
+            )
+        );
+
     updateViewerTransform();
 }
 
 function zoomViewerIn() {
-    viewerImage.style.transition = "transform 0.2s ease-out";
-    setViewerZoom(viewerZoom + 0.5);
+    viewerImage.style.transition =
+        "transform 0.2s ease-out";
+
+    setViewerZoom(
+        viewerZoom + 0.5
+    );
 }
 
 function zoomViewerOut() {
-    viewerImage.style.transition = "transform 0.2s ease-out";
-    setViewerZoom(viewerZoom - 0.5);
+    viewerImage.style.transition =
+        "transform 0.2s ease-out";
+
+    setViewerZoom(
+        viewerZoom - 0.5
+    );
 }
 
+
+// 초기화 버튼
 function resetViewerZoom() {
     viewerZoom = 1;
     viewerPositionX = 0;
     viewerPositionY = 0;
+    viewerRotation = 0;
+
     updateViewerTransform();
 }
 
+
+// 회전 버튼
 function rotateViewerPhoto() {
-    viewerRotation = (viewerRotation + 90) % 360;
+    viewerRotation =
+        (viewerRotation + 90) % 360;
+
     viewerPositionX = 0;
     viewerPositionY = 0;
-    viewerImage.style.transition = "transform 0.2s ease-out";
+
+    viewerImage.style.transition =
+        "transform 0.2s ease-out";
+
     updateViewerTransform();
 }
 
 
 async function prepareAdjacentImage(direction) {
-    const currentIndex = allPhotosList.findIndex(p => p.id === currentPhotoId);
-    const targetIndex = currentIndex + direction;
+    const currentIndex =
+        allPhotosList.findIndex(
+            p => p.id === currentPhotoId
+        );
 
-    if (targetIndex < 0 || targetIndex >= allPhotosList.length) {
-        adjacentImage.style.display = "none";
+    const targetIndex =
+        currentIndex + direction;
+
+    if (
+        targetIndex < 0 ||
+        targetIndex >= allPhotosList.length
+    ) {
+        adjacentImage.style.display =
+            "none";
+
         return false;
     }
 
-    const photo = await getPhoto(allPhotosList[targetIndex].id);
+    const photo =
+        await getPhoto(
+            allPhotosList[targetIndex].id
+        );
+
     if (!photo) return false;
 
-    if (adjacentPhotoURL) URL.revokeObjectURL(adjacentPhotoURL);
-    adjacentPhotoURL = URL.createObjectURL(photo.blob);
+    if (adjacentPhotoURL) {
+        URL.revokeObjectURL(
+            adjacentPhotoURL
+        );
+    }
 
-    adjacentImage.src = adjacentPhotoURL;
-    adjacentImage.style.display = "block";
+    adjacentPhotoURL =
+        URL.createObjectURL(
+            photo.blob
+        );
+
+    adjacentImage.src =
+        adjacentPhotoURL;
+
+    adjacentImage.style.display =
+        "block";
+
     return true;
 }
 
-photoZoomArea.addEventListener("pointerdown", function(event) {
-    if (event.pointerType === "touch" && event.isPrimary === false) return;
-
-    viewerImage.style.transition = "none";
-    adjacentImage.style.transition = "none";
-
-    if (viewerZoom > 1) {
-        viewerDragging = true;
-        viewerDragStartX = event.clientX;
-        viewerDragStartY = event.clientY;
-        viewerOriginX = viewerPositionX;
-        viewerOriginY = viewerPositionY;
-    } else {
-        isSwiping = true;
-        swipeStartX = event.clientX;
-        swipeStartY = event.clientY;
-        swipeCurrentX = event.clientX;
-    }
-
-    photoZoomArea.setPointerCapture(event.pointerId);
-});
-
-photoZoomArea.addEventListener("pointermove", async function(event) {
-    if (viewerZoom > 1 && viewerDragging) {
-        const dx = event.clientX - viewerDragStartX;
-        const dy = event.clientY - viewerDragStartY;
-        viewerPositionX = viewerOriginX + dx;
-        viewerPositionY = viewerOriginY + dy;
-        updateViewerTransform();
-    } else if (viewerZoom === 1 && isSwiping) {
-        swipeCurrentX = event.clientX;
-        const deltaX = swipeCurrentX - swipeStartX;
-        const windowWidth = window.innerWidth;
-
-        const currentIndex = allPhotosList.findIndex(p => p.id === currentPhotoId);
-        const isFirst = currentIndex === 0;
-        const isLast = currentIndex === allPhotosList.length - 1;
-
-        if ((isFirst && deltaX > 0) || (isLast && deltaX < 0)) {
-            viewerImage.style.transform =
-                `translate(0px, 0px) rotate(${viewerRotation}deg) scale(${getViewerFitScale() * viewerZoom})`;
-            adjacentImage.style.display = "none";
+photoZoomArea.addEventListener(
+    "pointerdown",
+    function(event) {
+        if (
+            event.pointerType === "touch" &&
+            event.isPrimary === false
+        ) {
             return;
         }
 
-        const direction = deltaX < 0 ? 1 : -1;
-        
-        if (adjacentImage.style.display === "none" || adjacentImage.dataset.dir != direction) {
-            const loaded = await prepareAdjacentImage(direction);
-            if (!loaded) return;
-            adjacentImage.dataset.dir = direction;
+        viewerImage.style.transition =
+            "none";
+
+        adjacentImage.style.transition =
+            "none";
+
+        if (viewerZoom > 1) {
+            viewerDragging = true;
+
+            viewerDragStartX =
+                event.clientX;
+
+            viewerDragStartY =
+                event.clientY;
+
+            viewerOriginX =
+                viewerPositionX;
+
+            viewerOriginY =
+                viewerPositionY;
+
+        } else {
+            isSwiping = true;
+
+            swipeStartX =
+                event.clientX;
+
+            swipeStartY =
+                event.clientY;
+
+            swipeCurrentX =
+                event.clientX;
         }
 
-        const adjacentOffsetX = direction > 0 ? windowWidth : -windowWidth;
-
-        viewerImage.style.transform =
-            `translate(${deltaX}px, 0px) rotate(${viewerRotation}deg) scale(${getViewerFitScale()})`;
-        adjacentImage.style.transform = `translate(${adjacentOffsetX + deltaX}px, 0px) scale(1)`;
+        photoZoomArea.setPointerCapture(
+            event.pointerId
+        );
     }
-});
+);
+
+photoZoomArea.addEventListener(
+    "pointermove",
+    async function(event) {
+        if (
+            viewerZoom > 1 &&
+            viewerDragging
+        ) {
+            const dx =
+                event.clientX -
+                viewerDragStartX;
+
+            const dy =
+                event.clientY -
+                viewerDragStartY;
+
+            viewerPositionX =
+                viewerOriginX + dx;
+
+            viewerPositionY =
+                viewerOriginY + dy;
+
+            updateViewerTransform();
+
+        } else if (
+            viewerZoom === 1 &&
+            isSwiping
+        ) {
+            swipeCurrentX =
+                event.clientX;
+
+            const deltaX =
+                swipeCurrentX -
+                swipeStartX;
+
+            const windowWidth =
+                window.innerWidth;
+
+            const currentIndex =
+                allPhotosList.findIndex(
+                    p => p.id === currentPhotoId
+                );
+
+            const isFirst =
+                currentIndex === 0;
+
+            const isLast =
+                currentIndex ===
+                allPhotosList.length - 1;
+
+            if (
+                (isFirst && deltaX > 0) ||
+                (isLast && deltaX < 0)
+            ) {
+                viewerImage.style.transform =
+                    `translate(0px, 0px) rotate(${viewerRotation}deg) scale(${getViewerFitScale() * viewerZoom})`;
+
+                adjacentImage.style.display =
+                    "none";
+
+                return;
+            }
+
+            const direction =
+                deltaX < 0 ? 1 : -1;
+
+            if (
+                adjacentImage.style.display ===
+                    "none" ||
+                adjacentImage.dataset.dir !=
+                    direction
+            ) {
+                const loaded =
+                    await prepareAdjacentImage(
+                        direction
+                    );
+
+                if (!loaded) return;
+
+                adjacentImage.dataset.dir =
+                    direction;
+            }
+
+            const adjacentOffsetX =
+                direction > 0
+                    ? windowWidth
+                    : -windowWidth;
+
+            viewerImage.style.transform =
+                `translate(${deltaX}px, 0px) rotate(${viewerRotation}deg) scale(${getViewerFitScale()})`;
+
+            adjacentImage.style.transform =
+                `translate(${adjacentOffsetX + deltaX}px, 0px) scale(1)`;
+        }
+    }
+);
 
 function handleSwipeEnd() {
     if (viewerZoom > 1) {
         viewerDragging = false;
+
     } else if (isSwiping) {
         isSwiping = false;
-        const deltaX = swipeCurrentX - swipeStartX;
+
+        const deltaX =
+            swipeCurrentX -
+            swipeStartX;
+
         const threshold = 60;
 
-        const currentIndex = allPhotosList.findIndex(p => p.id === currentPhotoId);
-        const isFirst = currentIndex === 0;
-        const isLast = currentIndex === allPhotosList.length - 1;
+        const currentIndex =
+            allPhotosList.findIndex(
+                p => p.id === currentPhotoId
+            );
 
-        if (deltaX < -threshold && !isLast) {
+        const isFirst =
+            currentIndex === 0;
+
+        const isLast =
+            currentIndex ===
+            allPhotosList.length - 1;
+
+        if (
+            deltaX < -threshold &&
+            !isLast
+        ) {
             navigatePhoto(1);
-        } else if (deltaX > threshold && !isFirst) {
+
+        } else if (
+            deltaX > threshold &&
+            !isFirst
+        ) {
             navigatePhoto(-1);
+
         } else {
             resetViewerTransformSmooth();
         }
     }
 }
 
-photoZoomArea.addEventListener("pointerup", handleSwipeEnd);
-photoZoomArea.addEventListener("pointercancel", handleSwipeEnd);
+photoZoomArea.addEventListener(
+    "pointerup",
+    handleSwipeEnd
+);
 
-photoZoomArea.addEventListener("touchstart", function(event) {
-    if (event.touches.length !== 2) return;
-    event.preventDefault();
-    isSwiping = false;
-    adjacentImage.style.display = "none";
-    viewerImage.style.transition = "none";
-    viewerPinchStartDistance = getDistance(event.touches[0], event.touches[1]);
-    viewerPinchStartZoom = viewerZoom;
-}, { passive: false });
+photoZoomArea.addEventListener(
+    "pointercancel",
+    handleSwipeEnd
+);
 
-photoZoomArea.addEventListener("touchmove", function(event) {
-    if (event.touches.length !== 2 || viewerPinchStartDistance <= 0) return;
-    event.preventDefault();
-    const currentDistance = getDistance(event.touches[0], event.touches[1]);
-    const ratio = currentDistance / viewerPinchStartDistance;
-    setViewerZoom(viewerPinchStartZoom * ratio);
-}, { passive: false });
+photoZoomArea.addEventListener(
+    "touchstart",
+    function(event) {
+        if (event.touches.length !== 2) {
+            return;
+        }
 
-photoZoomArea.addEventListener("touchend", function(event) {
-    if (event.touches.length < 2) viewerPinchStartDistance = 0;
-});
-viewerImage.addEventListener("load", function() {
-    updateViewerTransform();
-});
+        event.preventDefault();
 
-window.addEventListener("resize", function() {
-    if (!photoViewer.classList.contains("hidden")) {
+        isSwiping = false;
+
+        adjacentImage.style.display =
+            "none";
+
+        viewerImage.style.transition =
+            "none";
+
+        viewerPinchStartDistance =
+            getDistance(
+                event.touches[0],
+                event.touches[1]
+            );
+
+        viewerPinchStartZoom =
+            viewerZoom;
+    },
+    {
+        passive: false
+    }
+);
+
+photoZoomArea.addEventListener(
+    "touchmove",
+    function(event) {
+        if (
+            event.touches.length !== 2 ||
+            viewerPinchStartDistance <= 0
+        ) {
+            return;
+        }
+
+        event.preventDefault();
+
+        const currentDistance =
+            getDistance(
+                event.touches[0],
+                event.touches[1]
+            );
+
+        const ratio =
+            currentDistance /
+            viewerPinchStartDistance;
+
+        setViewerZoom(
+            viewerPinchStartZoom *
+            ratio
+        );
+    },
+    {
+        passive: false
+    }
+);
+
+photoZoomArea.addEventListener(
+    "touchend",
+    function(event) {
+        if (event.touches.length < 2) {
+            viewerPinchStartDistance = 0;
+        }
+    }
+);
+
+viewerImage.addEventListener(
+    "load",
+    function() {
         updateViewerTransform();
     }
-});
+);
 
-window.addEventListener("keydown", function(event) {
-    if (photoViewer.classList.contains("hidden")) return;
-
-    if (event.key === "ArrowLeft") {
-        prepareAdjacentImage(-1).then(success => { if (success) navigatePhoto(-1); });
-    } else if (event.key === "ArrowRight") {
-        prepareAdjacentImage(1).then(success => { if (success) navigatePhoto(1); });
-    } else if (event.key === "Escape") {
-        closePhotoViewer();
+window.addEventListener(
+    "resize",
+    function() {
+        if (
+            !photoViewer.classList.contains(
+                "hidden"
+            )
+        ) {
+            updateViewerTransform();
+        }
     }
-});
+);
+
+window.addEventListener(
+    "keydown",
+    function(event) {
+        if (
+            photoViewer.classList.contains(
+                "hidden"
+            )
+        ) {
+            return;
+        }
+
+        if (event.key === "ArrowLeft") {
+            prepareAdjacentImage(-1)
+                .then(success => {
+                    if (success) {
+                        navigatePhoto(-1);
+                    }
+                });
+
+        } else if (event.key === "ArrowRight") {
+            prepareAdjacentImage(1)
+                .then(success => {
+                    if (success) {
+                        navigatePhoto(1);
+                    }
+                });
+
+        } else if (event.key === "Escape") {
+            closePhotoViewer();
+        }
+    }
+);
 
 
 /* =========================================================
@@ -1061,33 +1725,61 @@ window.addEventListener("keydown", function(event) {
 
 async function deleteCurrentPhoto() {
     if (currentPhotoId === null) return;
-    if (!confirm("이 사진을 삭제할까요?")) return;
+
+    if (!confirm("이 사진을 삭제할까요?")) {
+        return;
+    }
 
     try {
-        await deletePhotoFromDatabase(currentPhotoId);
+        await deletePhotoFromDatabase(
+            currentPhotoId
+        );
+
         closePhotoViewer();
+
         await loadGallery();
+
     } catch (error) {
-        console.error("사진 삭제 실패", error);
+        console.error(
+            "사진 삭제 실패",
+            error
+        );
     }
 }
 
 async function deleteAllPhotos() {
-    const photos = await getAllPhotos();
+    const photos =
+        await getAllPhotos();
+
     if (photos.length === 0) {
         alert("삭제할 사진이 없습니다.");
         return;
     }
 
-    if (!confirm(`사진 ${photos.length}장을 모두 삭제할까요?`)) return;
+    if (
+        !confirm(
+            `사진 ${photos.length}장을 모두 삭제할까요?`
+        )
+    ) {
+        return;
+    }
 
     try {
         await deleteAllPhotosFromDatabase();
+
         await loadGallery();
+
         alert("모든 사진이 삭제되었습니다.");
+
     } catch (error) {
-        console.error("전체 삭제 실패", error);
-        alert("사진을 삭제하지 못했습니다.");
+        console.error(
+            "전체 삭제 실패",
+            error
+        );
+
+        alert(
+            "사진을 삭제하지 못했습니다."
+        );
     }
 }
 
@@ -1096,31 +1788,117 @@ async function deleteAllPhotos() {
    이벤트 연결
 ========================================================= */
 
-cameraPowerButton.addEventListener("click", toggleCamera);
-cameraPowerButtonOff.addEventListener("click", toggleCamera);
-switchCameraButton.addEventListener("click", switchCamera);
-galleryButton.addEventListener("click", openGallery);
-galleryBackButton.addEventListener("click", returnToCamera);
-retryCameraButton.addEventListener("click", startCamera);
+cameraPowerButton.addEventListener(
+    "click",
+    toggleCamera
+);
+
+cameraPowerButtonOff.addEventListener(
+    "click",
+    toggleCamera
+);
+
+switchCameraButton.addEventListener(
+    "click",
+    switchCamera
+);
+
+galleryButton.addEventListener(
+    "click",
+    openGallery
+);
+
+galleryBackButton.addEventListener(
+    "click",
+    returnToCamera
+);
+
+retryCameraButton.addEventListener(
+    "click",
+    startCamera
+);
+
 
 // 촬영 & 연사
-captureButton.addEventListener("mousedown", handleCaptureStart);
-captureButton.addEventListener("mouseup", handleCaptureEnd);
-captureButton.addEventListener("mouseleave", handleCaptureEnd);
+captureButton.addEventListener(
+    "mousedown",
+    handleCaptureStart
+);
 
-captureButton.addEventListener("touchstart", handleCaptureStart, { passive: false });
-captureButton.addEventListener("touchend", handleCaptureEnd, { passive: false });
-captureButton.addEventListener("touchcancel", handleCaptureEnd, { passive: false });
+captureButton.addEventListener(
+    "mouseup",
+    handleCaptureEnd
+);
 
-viewerCloseButton.addEventListener("click", closePhotoViewer);
-viewerRotateButton.addEventListener("click", rotateViewerPhoto);
-deletePhotoButton.addEventListener("click", deleteCurrentPhoto);
-downloadPhotoButton.addEventListener("click", downloadCurrentPhoto);
-deleteAllButton.addEventListener("click", deleteAllPhotos);
+captureButton.addEventListener(
+    "mouseleave",
+    handleCaptureEnd
+);
 
-zoomInButton.addEventListener("click", zoomViewerIn);
-zoomOutButton.addEventListener("click", zoomViewerOut);
-resetZoomButton.addEventListener("click", resetViewerZoom);
+captureButton.addEventListener(
+    "touchstart",
+    handleCaptureStart,
+    {
+        passive: false
+    }
+);
+
+captureButton.addEventListener(
+    "touchend",
+    handleCaptureEnd,
+    {
+        passive: false
+    }
+);
+
+captureButton.addEventListener(
+    "touchcancel",
+    handleCaptureEnd,
+    {
+        passive: false
+    }
+);
+
+
+viewerCloseButton.addEventListener(
+    "click",
+    closePhotoViewer
+);
+
+viewerRotateButton.addEventListener(
+    "click",
+    rotateViewerPhoto
+);
+
+deletePhotoButton.addEventListener(
+    "click",
+    deleteCurrentPhoto
+);
+
+downloadPhotoButton.addEventListener(
+    "click",
+    downloadCurrentPhoto
+);
+
+deleteAllButton.addEventListener(
+    "click",
+    deleteAllPhotos
+);
+
+zoomInButton.addEventListener(
+    "click",
+    zoomViewerIn
+);
+
+zoomOutButton.addEventListener(
+    "click",
+    zoomViewerOut
+);
+
+resetZoomButton.addEventListener(
+    "click",
+    resetViewerZoom
+);
 
 
 /* =========================================================
@@ -1130,12 +1908,26 @@ resetZoomButton.addEventListener("click", resetViewerZoom);
 async function initializeApp() {
     try {
         await openDatabase();
+
         stopCamera();
-        cameraUI.classList.add("hidden");
-        cameraOffScreen.classList.remove("hidden");
+
+        cameraUI.classList.add(
+            "hidden"
+        );
+
+        cameraOffScreen.classList.remove(
+            "hidden"
+        );
+
     } catch (error) {
-        console.error("앱 초기화 실패", error);
-        showCameraError("앱을 초기화할 수 없습니다.");
+        console.error(
+            "앱 초기화 실패",
+            error
+        );
+
+        showCameraError(
+            "앱을 초기화할 수 없습니다."
+        );
     }
 }
 
