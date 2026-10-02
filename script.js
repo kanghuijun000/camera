@@ -28,6 +28,7 @@ const viewerImage = document.getElementById("viewerImage");
 const viewerCloseButton = document.getElementById("viewerCloseButton");
 const deletePhotoButton = document.getElementById("deletePhotoButton");
 const downloadPhotoButton = document.getElementById("downloadPhotoButton");
+const viewerRotateButton = document.getElementById("viewerRotateButton");
 const cameraZoomIndicator = document.getElementById("cameraZoomIndicator");
 const zoomInButton = document.getElementById("zoomInButton");
 const zoomOutButton = document.getElementById("zoomOutButton");
@@ -97,6 +98,7 @@ let viewerOriginX = 0;
 let viewerOriginY = 0;
 let viewerPinchStartDistance = 0;
 let viewerPinchStartZoom = 1;
+let viewerRotation = 0;
 
 let adjacentImage = document.createElement("img");
 adjacentImage.style.position = "absolute";
@@ -304,18 +306,32 @@ function hideCameraError() {
 function setupCameraZoom() {
     cameraHardwareZoom = false;
     cameraZoom = 1;
-    updateCameraZoomUI();
 
-    if (!cameraTrack || typeof cameraTrack.getCapabilities !== "function") return;
+    if (!cameraTrack || typeof cameraTrack.getCapabilities !== "function") {
+        updateCameraZoomUI();
+        return;
+    }
 
     try {
         const capabilities = cameraTrack.getCapabilities();
         if (capabilities.zoom && capabilities.zoom.min !== undefined && capabilities.zoom.max !== undefined) {
             cameraHardwareZoom = true;
+
+            if (typeof cameraTrack.getSettings === "function") {
+                const settings = cameraTrack.getSettings();
+                if (typeof settings.zoom === "number") {
+                    cameraZoom = Math.max(
+                        CAMERA_MIN_ZOOM,
+                        Math.min(CAMERA_MAX_ZOOM, settings.zoom)
+                    );
+                }
+            }
         }
     } catch (error) {
         console.log("하드웨어 줌 미지원", error);
     }
+
+    updateCameraZoomUI();
 }
 
 function updateCameraZoomUI() {
@@ -342,8 +358,19 @@ async function applyCameraZoom(value) {
             await cameraTrack.applyConstraints({
                 advanced: [{ zoom: actualZoom }]
             });
+
+            if (typeof cameraTrack.getSettings === "function") {
+                const settings = cameraTrack.getSettings();
+                if (typeof settings.zoom === "number") {
+                    cameraZoom = Math.max(
+                        CAMERA_MIN_ZOOM,
+                        Math.min(CAMERA_MAX_ZOOM, settings.zoom)
+                    );
+                }
+            }
         } catch (error) {
             console.log("하드웨어 줌 제어 실패", error);
+            cameraHardwareZoom = false;
         }
     }
 
@@ -670,6 +697,7 @@ async function openPhotoViewer(id) {
     
     viewerImage.style.transition = "none";
     viewerImage.src = currentPhotoURL;
+    viewerRotation = 0;
 
     resetViewerZoom();
     photoViewer.classList.remove("hidden");
@@ -693,6 +721,7 @@ function closePhotoViewer() {
     adjacentImage.style.display = "none";
     adjacentImage.src = "";
     currentPhotoId = null;
+    viewerRotation = 0;
     resetViewerZoom();
 }
 
@@ -717,19 +746,21 @@ function navigatePhoto(direction) {
     adjacentImage.style.transition = `transform ${duration}ms cubic-bezier(0.25, 1, 0.5, 1)`;
 
     const mainExitX = direction > 0 ? -windowWidth : windowWidth;
-    viewerImage.style.transform = `translate(${mainExitX}px, 0px) scale(1)`;
+    viewerImage.style.transform =
+        `translate(${mainExitX}px, 0px) rotate(${viewerRotation}deg) scale(${getViewerFitScale() * viewerZoom})`;
     adjacentImage.style.transform = `translate(0px, 0px) scale(1)`;
 
     setTimeout(async () => {
         currentPhotoId = nextPhotoId;
+        viewerRotation = 0;
         if (currentPhotoURL) URL.revokeObjectURL(currentPhotoURL);
 
         currentPhotoURL = adjacentPhotoURL;
         adjacentPhotoURL = null;
-
         viewerImage.style.transition = "none";
         viewerImage.src = currentPhotoURL;
-        viewerImage.style.transform = `translate(0px, 0px) scale(1)`;
+        viewerImage.style.transform =
+            `translate(0px, 0px) rotate(0deg) scale(${getViewerFitScale()})`;
 
         adjacentImage.style.display = "none";
         adjacentImage.src = "";
@@ -762,6 +793,27 @@ async function downloadCurrentPhoto() {
    뷰어 줌 & 스와이프 제어
 ========================================================= */
 
+function getViewerFitScale() {
+    const containerWidth = photoZoomArea.clientWidth;
+    const containerHeight = photoZoomArea.clientHeight;
+    const imgWidth = viewerImage.offsetWidth;
+    const imgHeight = viewerImage.offsetHeight;
+
+    if (!containerWidth || !containerHeight || !imgWidth || !imgHeight) {
+        return 1;
+    }
+
+    const isQuarterTurn = Math.abs(viewerRotation) % 180 === 90;
+    const rotatedWidth = isQuarterTurn ? imgHeight : imgWidth;
+    const rotatedHeight = isQuarterTurn ? imgWidth : imgHeight;
+
+    return Math.min(
+        1,
+        containerWidth / rotatedWidth,
+        containerHeight / rotatedHeight
+    );
+}
+
 function clampViewerPosition() {
     if (viewerZoom <= 1) {
         viewerPositionX = 0;
@@ -771,14 +823,17 @@ function clampViewerPosition() {
 
     const containerWidth = photoZoomArea.clientWidth;
     const containerHeight = photoZoomArea.clientHeight;
-
     const imgWidth = viewerImage.offsetWidth;
     const imgHeight = viewerImage.offsetHeight;
 
     if (!imgWidth || !imgHeight) return;
 
-    const scaledWidth = imgWidth * viewerZoom;
-    const scaledHeight = imgHeight * viewerZoom;
+    const fitScale = getViewerFitScale();
+    const isQuarterTurn = Math.abs(viewerRotation) % 180 === 90;
+    const rotatedWidth = isQuarterTurn ? imgHeight : imgWidth;
+    const rotatedHeight = isQuarterTurn ? imgWidth : imgHeight;
+    const scaledWidth = rotatedWidth * fitScale * viewerZoom;
+    const scaledHeight = rotatedHeight * fitScale * viewerZoom;
 
     const maxX = Math.max(0, (scaledWidth - containerWidth) / 2);
     const maxY = Math.max(0, (scaledHeight - containerHeight) / 2);
@@ -789,17 +844,21 @@ function clampViewerPosition() {
 
 function updateViewerTransform() {
     clampViewerPosition();
-    viewerImage.style.transform = `translate(${viewerPositionX}px, ${viewerPositionY}px) scale(${viewerZoom})`;
+    const fitScale = getViewerFitScale();
+
+    viewerImage.style.transform =
+        `translate(${viewerPositionX}px, ${viewerPositionY}px) rotate(${viewerRotation}deg) scale(${fitScale * viewerZoom})`;
+
     viewerZoomText.textContent = `${viewerZoom.toFixed(1)}×`;
 }
 
 function resetViewerTransformSmooth() {
     viewerImage.style.transition = "transform 0.2s cubic-bezier(0.25, 1, 0.5, 1)";
     adjacentImage.style.transition = "transform 0.2s cubic-bezier(0.25, 1, 0.5, 1)";
-    
-    viewerImage.style.transform = `translate(0px, 0px) scale(1)`;
-    
-    const currentIndex = allPhotosList.findIndex(p => p.id === currentPhotoId);
+
+    viewerImage.style.transform =
+        `translate(0px, 0px) rotate(${viewerRotation}deg) scale(${getViewerFitScale() * viewerZoom})`;
+
     const deltaX = swipeCurrentX - swipeStartX;
     const windowWidth = window.innerWidth;
 
@@ -836,6 +895,15 @@ function resetViewerZoom() {
     viewerPositionY = 0;
     updateViewerTransform();
 }
+
+function rotateViewerPhoto() {
+    viewerRotation = (viewerRotation + 90) % 360;
+    viewerPositionX = 0;
+    viewerPositionY = 0;
+    viewerImage.style.transition = "transform 0.2s ease-out";
+    updateViewerTransform();
+}
+
 
 async function prepareAdjacentImage(direction) {
     const currentIndex = allPhotosList.findIndex(p => p.id === currentPhotoId);
@@ -896,7 +964,8 @@ photoZoomArea.addEventListener("pointermove", async function(event) {
         const isLast = currentIndex === allPhotosList.length - 1;
 
         if ((isFirst && deltaX > 0) || (isLast && deltaX < 0)) {
-            viewerImage.style.transform = `translate(0px, 0px) scale(1)`;
+            viewerImage.style.transform =
+                `translate(0px, 0px) rotate(${viewerRotation}deg) scale(${getViewerFitScale() * viewerZoom})`;
             adjacentImage.style.display = "none";
             return;
         }
@@ -911,7 +980,8 @@ photoZoomArea.addEventListener("pointermove", async function(event) {
 
         const adjacentOffsetX = direction > 0 ? windowWidth : -windowWidth;
 
-        viewerImage.style.transform = `translate(${deltaX}px, 0px) scale(1)`;
+        viewerImage.style.transform =
+            `translate(${deltaX}px, 0px) rotate(${viewerRotation}deg) scale(${getViewerFitScale()})`;
         adjacentImage.style.transform = `translate(${adjacentOffsetX + deltaX}px, 0px) scale(1)`;
     }
 });
@@ -961,6 +1031,15 @@ photoZoomArea.addEventListener("touchmove", function(event) {
 
 photoZoomArea.addEventListener("touchend", function(event) {
     if (event.touches.length < 2) viewerPinchStartDistance = 0;
+});
+viewerImage.addEventListener("load", function() {
+    updateViewerTransform();
+});
+
+window.addEventListener("resize", function() {
+    if (!photoViewer.classList.contains("hidden")) {
+        updateViewerTransform();
+    }
 });
 
 window.addEventListener("keydown", function(event) {
@@ -1034,6 +1113,7 @@ captureButton.addEventListener("touchend", handleCaptureEnd, { passive: false })
 captureButton.addEventListener("touchcancel", handleCaptureEnd, { passive: false });
 
 viewerCloseButton.addEventListener("click", closePhotoViewer);
+viewerRotateButton.addEventListener("click", rotateViewerPhoto);
 deletePhotoButton.addEventListener("click", deleteCurrentPhoto);
 downloadPhotoButton.addEventListener("click", downloadCurrentPhoto);
 deleteAllButton.addEventListener("click", deleteAllPhotos);
@@ -1050,7 +1130,9 @@ resetZoomButton.addEventListener("click", resetViewerZoom);
 async function initializeApp() {
     try {
         await openDatabase();
-        await startCamera();
+        stopCamera();
+        cameraUI.classList.add("hidden");
+        cameraOffScreen.classList.remove("hidden");
     } catch (error) {
         console.error("앱 초기화 실패", error);
         showCameraError("앱을 초기화할 수 없습니다.");
