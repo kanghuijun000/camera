@@ -1335,8 +1335,8 @@ function resetViewerZoom() {
 
 // 회전 버튼
 function rotateViewerPhoto() {
-    viewerRotation =
-        (viewerRotation + 90) % 360;
+    viewerRotation += 90;
+
 
     viewerPositionX = 0;
     viewerPositionY = 0;
