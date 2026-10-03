@@ -20,10 +20,10 @@
       <div class="top-bar">
         <button id="cameraPowerButton" class="top-button" aria-label="카메라 끄기">⏻</button>
         <div id="cameraZoomIndicator" class="zoom-indicator">1.0×</div>
-        <div style="width: 48px;"></div>
+        <div class="top-bar-spacer"></div>
       </div>
 
-      <!-- 하단 컨트롤 (갤러리, 셔터/연사, 카메라 전환) -->
+      <!-- 하단/측면 컨트롤 (갤러리, 셔터/연사, 카메라 전환) -->
       <div class="camera-controls">
         <!-- 갤러리 버튼 -->
         <button id="galleryButton" class="gallery-open-button" aria-label="갤러리 열기">
@@ -32,7 +32,7 @@
         </button>
 
         <!-- 셔터 버튼 (연사 카운터 포함) -->
-        <div style="position: relative; display: flex; flex-direction: column; align-items: center;">
+        <div class="shutter-container">
           <div id="burstCounter" class="burst-counter" style="display: none;">0/30</div>
           <button id="captureButton" class="capture-button" aria-label="촬영">
             <span></span>
