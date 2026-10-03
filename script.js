@@ -56,10 +56,8 @@ let cameraPinchStartZoom = 1;
 let isSavingPhotos = false;
 let savingPromise = null;
 
-// 재사용 캔버스 & 연사 최적화 비트맵 큐
-const reusableCanvas = document.createElement("canvas");
-const reusableContext = reusableCanvas.getContext("2d", { alpha: false });
-let burstBitmapQueue = [];
+// 연사 메인 스레드 캔버스/비트맵 버퍼 큐 (메모리 누수 완전 방지)
+let burstCanvasQueue = [];
 
 // 연사(Long Press) 관련 변수
 let burstTimer = null;
@@ -122,7 +120,7 @@ let adjacentPhotoURL = null;
 
 
 /* =========================================================
-   IndexedDB
+   IndexedDB (단일 트랜잭션 일괄 저장 지원)
 ========================================================= */
 
 function openDatabase() {
@@ -159,6 +157,25 @@ function savePhoto(blob) {
 
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
+    });
+}
+
+function saveMultiplePhotos(blobs) {
+    return new Promise((resolve, reject) => {
+        if (!blobs || blobs.length === 0) return resolve();
+
+        const transaction = db.transaction("photos", "readwrite");
+        const store = transaction.objectStore("photos");
+
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+
+        blobs.forEach(blob => {
+            store.add({
+                blob: blob,
+                date: Date.now()
+            });
+        });
     });
 }
 
@@ -371,8 +388,7 @@ function setupCameraZoom() {
 
 function updateCameraZoomUI() {
     const scaleFactor = !cameraHardwareZoom ? cameraZoom : 1;
-    const mirrorFactor =
-        currentFacingMode === "user" ? -1 : 1;
+    const mirrorFactor = currentFacingMode === "user" ? -1 : 1;
 
     cameraPreview.style.transform =
         `scale(${scaleFactor * mirrorFactor}, ${scaleFactor})`;
@@ -508,10 +524,10 @@ cameraPreview.addEventListener(
 
 
 /* =========================================================
-   촬영 및 연사
+   촬영 및 연사 (해상도 보존 및 메모리 누수 제로 구현)
 ========================================================= */
 
-// 단발 캡처
+// 단발 캡처 (소프트웨어 줌 시 고해상도 수확)
 async function capturePhoto() {
     if (
         !cameraEnabled ||
@@ -524,6 +540,11 @@ async function capturePhoto() {
     const videoWidth = cameraPreview.videoWidth;
     const videoHeight = cameraPreview.videoHeight;
 
+    const canvas = document.createElement("canvas");
+    canvas.width = videoWidth;
+    canvas.height = videoHeight;
+    const ctx = canvas.getContext("2d", { alpha: false });
+
     let sourceWidth = videoWidth;
     let sourceHeight = videoHeight;
     let sourceX = 0;
@@ -531,33 +552,22 @@ async function capturePhoto() {
 
     if (!cameraHardwareZoom && cameraZoom > 1) {
         const cropRatio = 1 / cameraZoom;
-
         sourceWidth = videoWidth * cropRatio;
         sourceHeight = videoHeight * cropRatio;
-
-        sourceX =
-            (videoWidth - sourceWidth) / 2;
-
-        sourceY =
-            (videoHeight - sourceHeight) / 2;
+        sourceX = (videoWidth - sourceWidth) / 2;
+        sourceY = (videoHeight - sourceHeight) / 2;
     }
 
-    reusableCanvas.width = sourceWidth;
-    reusableCanvas.height = sourceHeight;
-
-    reusableContext.imageSmoothingEnabled = true;
-    reusableContext.imageSmoothingQuality = "high";
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
 
     if (currentFacingMode === "user") {
-        reusableContext.save();
-        reusableContext.translate(
-            reusableCanvas.width,
-            0
-        );
-        reusableContext.scale(-1, 1);
+        ctx.save();
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
     }
 
-    reusableContext.drawImage(
+    ctx.drawImage(
         cameraPreview,
         sourceX,
         sourceY,
@@ -565,34 +575,30 @@ async function capturePhoto() {
         sourceHeight,
         0,
         0,
-        reusableCanvas.width,
-        reusableCanvas.height
+        canvas.width,
+        canvas.height
     );
 
     if (currentFacingMode === "user") {
-        reusableContext.restore();
+        ctx.restore();
     }
 
     isSavingPhotos = true;
 
     savingPromise = new Promise((resolve) => {
-        reusableCanvas.toBlob(
+        canvas.toBlob(
             async function(blob) {
                 if (blob) {
                     try {
                         await savePhoto(blob);
 
                         cameraPreview.style.opacity = "0.4";
-
                         setTimeout(() => {
                             cameraPreview.style.opacity = "1";
                         }, 80);
 
                     } catch (error) {
-                        console.error(
-                            "사진 저장 실패",
-                            error
-                        );
+                        console.error("사진 저장 실패", error);
                     }
                 }
 
@@ -600,7 +606,7 @@ async function capturePhoto() {
                 resolve();
             },
             "image/jpeg",
-            1.0
+            0.95
         );
     });
 
@@ -608,7 +614,7 @@ async function capturePhoto() {
 }
 
 
-// 연사 프레임 비트맵 저장
+// 연사 프레임 수집 (ImageBitmap 생성 즉시 Canvas 전사 후 Bitmap 닫기로 메모리 완벽 해제)
 async function captureBurstFrame() {
     if (
         !cameraEnabled ||
@@ -619,20 +625,57 @@ async function captureBurstFrame() {
     }
 
     try {
-        const bitmap =
-            await createImageBitmap(cameraPreview);
+        const bitmap = await createImageBitmap(cameraPreview);
+        const videoWidth = bitmap.width;
+        const videoHeight = bitmap.height;
 
-        burstBitmapQueue.push({
-            bitmap: bitmap,
-            zoom: cameraZoom,
-            facingMode: currentFacingMode
-        });
+        const canvas = document.createElement("canvas");
+        canvas.width = videoWidth;
+        canvas.height = videoHeight;
+        const ctx = canvas.getContext("2d", { alpha: false });
+
+        let sourceWidth = videoWidth;
+        let sourceHeight = videoHeight;
+        let sourceX = 0;
+        let sourceY = 0;
+
+        if (!cameraHardwareZoom && cameraZoom > 1) {
+            const cropRatio = 1 / cameraZoom;
+            sourceWidth = videoWidth * cropRatio;
+            sourceHeight = videoHeight * cropRatio;
+            sourceX = (videoWidth - sourceWidth) / 2;
+            sourceY = (videoHeight - sourceHeight) / 2;
+        }
+
+        if (currentFacingMode === "user") {
+            ctx.save();
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+        }
+
+        ctx.drawImage(
+            bitmap,
+            sourceX,
+            sourceY,
+            sourceWidth,
+            sourceHeight,
+            0,
+            0,
+            canvas.width,
+            canvas.height
+        );
+
+        if (currentFacingMode === "user") {
+            ctx.restore();
+        }
+
+        // 비트맵 즉시 종료 (GPU 메모리 소모 방지 핵심)
+        bitmap.close();
+
+        burstCanvasQueue.push(canvas);
 
     } catch (e) {
-        console.error(
-            "비트맵 캡처 실패",
-            e
-        );
+        console.error("비트맵 연사 프레임 수집 실패", e);
     }
 }
 
@@ -670,12 +713,10 @@ function handleCaptureEnd(event) {
 
 function startBurstCapture() {
     burstCount = 0;
-    burstBitmapQueue = [];
+    burstCanvasQueue = [];
 
     if (burstCounter) {
-        burstCounter.textContent =
-            `0/${MAX_BURST_COUNT}`;
-
+        burstCounter.textContent = `0/${MAX_BURST_COUNT}`;
         burstCounter.style.display = "block";
     }
 
@@ -688,8 +729,7 @@ function startBurstCapture() {
         burstCount++;
 
         if (burstCounter) {
-            burstCounter.textContent =
-                `${burstCount}/${MAX_BURST_COUNT}`;
+            burstCounter.textContent = `${burstCount}/${MAX_BURST_COUNT}`;
         }
 
         captureBurstFrame();
@@ -697,11 +737,7 @@ function startBurstCapture() {
 
     executeCapture();
 
-    burstInterval =
-        setInterval(
-            executeCapture,
-            BURST_INTERVAL
-        );
+    burstInterval = setInterval(executeCapture, BURST_INTERVAL);
 }
 
 async function stopBurstCapture() {
@@ -714,119 +750,35 @@ async function stopBurstCapture() {
         burstCounter.style.display = "none";
     }
 
-    if (burstBitmapQueue.length > 0) {
-        const queueToProcess =
-            [...burstBitmapQueue];
-
-        burstBitmapQueue = [];
+    if (burstCanvasQueue.length > 0) {
+        const queueToProcess = [...burstCanvasQueue];
+        burstCanvasQueue = [];
 
         isSavingPhotos = true;
 
-        savingPromise =
-            processAndSaveBurstQueue(
-                queueToProcess
-            ).then(() => {
-                isSavingPhotos = false;
-            });
+        savingPromise = processAndSaveBurstCanvases(queueToProcess).then(() => {
+            isSavingPhotos = false;
+        });
     }
 }
 
 
-// 연사 고속 병렬 변환 & DB 저장
-async function processAndSaveBurstQueue(queue) {
-    const saveTasks = queue.map((item) => {
-        return new Promise(async (resolve) => {
-            const {
-                bitmap,
-                zoom,
-                facingMode
-            } = item;
-
-            const canvas =
-                document.createElement("canvas");
-
-            const ctx =
-                canvas.getContext(
-                    "2d",
-                    {
-                        alpha: false
-                    }
-                );
-
-            const videoWidth = bitmap.width;
-            const videoHeight = bitmap.height;
-
-            let sourceWidth = videoWidth;
-            let sourceHeight = videoHeight;
-            let sourceX = 0;
-            let sourceY = 0;
-
-            if (
-                !cameraHardwareZoom &&
-                zoom > 1
-            ) {
-                const cropRatio = 1 / zoom;
-
-                sourceWidth =
-                    videoWidth * cropRatio;
-
-                sourceHeight =
-                    videoHeight * cropRatio;
-
-                sourceX =
-                    (videoWidth - sourceWidth) / 2;
-
-                sourceY =
-                    (videoHeight - sourceHeight) / 2;
-            }
-
-            canvas.width = sourceWidth;
-            canvas.height = sourceHeight;
-
-            if (facingMode === "user") {
-                ctx.save();
-
-                ctx.translate(
-                    canvas.width,
-                    0
-                );
-
-                ctx.scale(-1, 1);
-            }
-
-            ctx.drawImage(
-                bitmap,
-                sourceX,
-                sourceY,
-                sourceWidth,
-                sourceHeight,
-                0,
-                0,
-                canvas.width,
-                canvas.height
-            );
-
-            if (facingMode === "user") {
-                ctx.restore();
-            }
-
-            bitmap.close();
-
-            canvas.toBlob(
-                async (blob) => {
-                    if (blob) {
-                        await savePhoto(blob);
-                    }
-
-                    resolve();
-                },
-                "image/jpeg",
-                1.0
-            );
+// 연사 고속 Blob 변환 및 DB 일괄 저장
+async function processAndSaveBurstCanvases(canvases) {
+    const blobPromises = canvases.map(canvas => {
+        return new Promise(resolve => {
+            canvas.toBlob(blob => resolve(blob), "image/jpeg", 0.9);
         });
     });
 
-    await Promise.all(saveTasks);
+    const blobs = await Promise.all(blobPromises);
+    const validBlobs = blobs.filter(b => b !== null);
+
+    try {
+        await saveMultiplePhotos(validBlobs);
+    } catch (e) {
+        console.error("연사 DB 저장 중 오류 발생:", e);
+    }
 }
 
 
@@ -835,10 +787,7 @@ async function processAndSaveBurstQueue(queue) {
 ========================================================= */
 
 function clearGalleryObjectURLs() {
-    galleryObjectURLs.forEach(
-        url => URL.revokeObjectURL(url)
-    );
-
+    galleryObjectURLs.forEach(url => URL.revokeObjectURL(url));
     galleryObjectURLs = [];
 }
 
@@ -858,72 +807,43 @@ function returnToCamera() {
 
 async function loadGallery() {
     clearGalleryObjectURLs();
-
     galleryGrid.innerHTML = "";
 
     if (isSavingPhotos && savingPromise) {
         emptyIcon.textContent = "⏳";
-        emptyText.textContent =
-            "촬영한 사진을 저장하는 중입니다...";
-
-        emptyGallery.classList.remove(
-            "hidden"
-        );
+        emptyText.textContent = "촬영한 사진을 저장하는 중입니다...";
+        emptyGallery.classList.remove("hidden");
 
         await savingPromise;
     }
 
-    const photos =
-        await getAllPhotos();
+    const photos = await getAllPhotos();
 
     if (photos.length === 0) {
         emptyIcon.textContent = "📷";
-        emptyText.textContent =
-            "저장된 사진이 없습니다.";
-
-        emptyGallery.classList.remove(
-            "hidden"
-        );
-
+        emptyText.textContent = "저장된 사진이 없습니다.";
+        emptyGallery.classList.remove("hidden");
         allPhotosList = [];
-
         return;
     }
 
     emptyGallery.classList.add("hidden");
 
-    photos.sort(
-        (a, b) => b.date - a.date
-    );
-
+    photos.sort((a, b) => b.date - a.date);
     allPhotosList = photos;
 
     photos.forEach(photo => {
-        const item =
-            document.createElement("div");
+        const item = document.createElement("div");
+        item.className = "gallery-item";
 
-        item.className =
-            "gallery-item";
-
-        const image =
-            document.createElement("img");
-
-        const url =
-            URL.createObjectURL(
-                photo.blob
-            );
-
+        const image = document.createElement("img");
+        const url = URL.createObjectURL(photo.blob);
         galleryObjectURLs.push(url);
 
         image.src = url;
-
         item.appendChild(image);
 
-        item.addEventListener(
-            "click",
-            () => openPhotoViewer(photo.id)
-        );
-
+        item.addEventListener("click", () => openPhotoViewer(photo.id));
         galleryGrid.appendChild(item);
     });
 }
@@ -934,54 +854,36 @@ async function loadGallery() {
 ========================================================= */
 
 async function openPhotoViewer(id) {
-    const photo =
-        await getPhoto(id);
-
+    const photo = await getPhoto(id);
     if (!photo) return;
 
     currentPhotoId = id;
 
     if (currentPhotoURL) {
-        URL.revokeObjectURL(
-            currentPhotoURL
-        );
+        URL.revokeObjectURL(currentPhotoURL);
     }
 
-    currentPhotoURL =
-        URL.createObjectURL(
-            photo.blob
-        );
+    currentPhotoURL = URL.createObjectURL(photo.blob);
 
     viewerImage.style.transition = "none";
     viewerImage.src = currentPhotoURL;
 
     viewerRotation = 0;
-
     resetViewerZoom();
 
-    photoViewer.classList.remove(
-        "hidden"
-    );
+    photoViewer.classList.remove("hidden");
 }
 
 function closePhotoViewer() {
-    photoViewer.classList.add(
-        "hidden"
-    );
+    photoViewer.classList.add("hidden");
 
     if (currentPhotoURL) {
-        URL.revokeObjectURL(
-            currentPhotoURL
-        );
-
+        URL.revokeObjectURL(currentPhotoURL);
         currentPhotoURL = null;
     }
 
     if (adjacentPhotoURL) {
-        URL.revokeObjectURL(
-            adjacentPhotoURL
-        );
-
+        URL.revokeObjectURL(adjacentPhotoURL);
         adjacentPhotoURL = null;
     }
 
@@ -992,44 +894,28 @@ function closePhotoViewer() {
     adjacentImage.src = "";
 
     currentPhotoId = null;
-
     viewerRotation = 0;
 
     resetViewerZoom();
 }
 
 function navigatePhoto(direction) {
-    if (
-        !currentPhotoId ||
-        allPhotosList.length <= 1
-    ) {
+    if (!currentPhotoId || allPhotosList.length <= 1) {
         return;
     }
 
-    const currentIndex =
-        allPhotosList.findIndex(
-            p => p.id === currentPhotoId
-        );
-
+    const currentIndex = allPhotosList.findIndex(p => p.id === currentPhotoId);
     if (currentIndex === -1) return;
 
-    let targetIndex =
-        currentIndex + direction;
+    let targetIndex = currentIndex + direction;
 
-    if (
-        targetIndex < 0 ||
-        targetIndex >= allPhotosList.length
-    ) {
+    if (targetIndex < 0 || targetIndex >= allPhotosList.length) {
         resetViewerTransformSmooth();
         return;
     }
 
-    const nextPhotoId =
-        allPhotosList[targetIndex].id;
-
-    const windowWidth =
-        window.innerWidth;
-
+    const nextPhotoId = allPhotosList[targetIndex].id;
+    const windowWidth = window.innerWidth;
     const duration = 250;
 
     viewerImage.style.transition =
@@ -1038,46 +924,30 @@ function navigatePhoto(direction) {
     adjacentImage.style.transition =
         `transform ${duration}ms cubic-bezier(0.25, 1, 0.5, 1)`;
 
-    const mainExitX =
-        direction > 0
-            ? -windowWidth
-            : windowWidth;
+    const mainExitX = direction > 0 ? -windowWidth : windowWidth;
 
     viewerImage.style.transform =
         `translate(${mainExitX}px, 0px) rotate(${viewerRotation}deg) scale(${getViewerFitScale() * viewerZoom})`;
 
-    adjacentImage.style.transform =
-        "translate(0px, 0px) scale(1)";
+    adjacentImage.style.transform = "translate(0px, 0px) scale(1)";
 
     setTimeout(async () => {
-        currentPhotoId =
-            nextPhotoId;
-
+        currentPhotoId = nextPhotoId;
         viewerRotation = 0;
 
         if (currentPhotoURL) {
-            URL.revokeObjectURL(
-                currentPhotoURL
-            );
+            URL.revokeObjectURL(currentPhotoURL);
         }
 
-        currentPhotoURL =
-            adjacentPhotoURL;
-
+        currentPhotoURL = adjacentPhotoURL;
         adjacentPhotoURL = null;
 
-        viewerImage.style.transition =
-            "none";
-
-        viewerImage.src =
-            currentPhotoURL;
-
+        viewerImage.style.transition = "none";
+        viewerImage.src = currentPhotoURL;
         viewerImage.style.transform =
             `translate(0px, 0px) rotate(0deg) scale(${getViewerFitScale()})`;
 
-        adjacentImage.style.display =
-            "none";
-
+        adjacentImage.style.display = "none";
         adjacentImage.src = "";
 
         resetViewerZoom();
@@ -1088,36 +958,21 @@ function navigatePhoto(direction) {
 async function downloadCurrentPhoto() {
     if (!currentPhotoId) return;
 
-    const photo =
-        await getPhoto(currentPhotoId);
-
+    const photo = await getPhoto(currentPhotoId);
     if (!photo || !photo.blob) return;
 
-    const reader =
-        new FileReader();
-
+    const reader = new FileReader();
     reader.onload = function(e) {
-        const dataUrl =
-            e.target.result;
-
-        const link =
-            document.createElement("a");
-
+        const dataUrl = e.target.result;
+        const link = document.createElement("a");
         link.href = dataUrl;
-
-        link.download =
-            `photo_${Date.now()}.jpg`;
-
+        link.download = `photo_${Date.now()}.jpg`;
         document.body.appendChild(link);
-
         link.click();
-
         document.body.removeChild(link);
     };
 
-    reader.readAsDataURL(
-        photo.blob
-    );
+    reader.readAsDataURL(photo.blob);
 }
 
 
@@ -1126,39 +981,18 @@ async function downloadCurrentPhoto() {
 ========================================================= */
 
 function getViewerFitScale() {
-    const containerWidth =
-        photoZoomArea.clientWidth;
+    const containerWidth = photoZoomArea.clientWidth;
+    const containerHeight = photoZoomArea.clientHeight;
+    const imgWidth = viewerImage.offsetWidth;
+    const imgHeight = viewerImage.offsetHeight;
 
-    const containerHeight =
-        photoZoomArea.clientHeight;
-
-    const imgWidth =
-        viewerImage.offsetWidth;
-
-    const imgHeight =
-        viewerImage.offsetHeight;
-
-    if (
-        !containerWidth ||
-        !containerHeight ||
-        !imgWidth ||
-        !imgHeight
-    ) {
+    if (!containerWidth || !containerHeight || !imgWidth || !imgHeight) {
         return 1;
     }
 
-    const isQuarterTurn =
-        Math.abs(viewerRotation) % 180 === 90;
-
-    const rotatedWidth =
-        isQuarterTurn
-            ? imgHeight
-            : imgWidth;
-
-    const rotatedHeight =
-        isQuarterTurn
-            ? imgWidth
-            : imgHeight;
+    const isQuarterTurn = Math.abs(viewerRotation) % 180 === 90;
+    const rotatedWidth = isQuarterTurn ? imgHeight : imgWidth;
+    const rotatedHeight = isQuarterTurn ? imgWidth : imgHeight;
 
     return Math.min(
         1,
@@ -1174,549 +1008,268 @@ function clampViewerPosition() {
         return;
     }
 
-    const containerWidth =
-        photoZoomArea.clientWidth;
-
-    const containerHeight =
-        photoZoomArea.clientHeight;
-
-    const imgWidth =
-        viewerImage.offsetWidth;
-
-    const imgHeight =
-        viewerImage.offsetHeight;
+    const containerWidth = photoZoomArea.clientWidth;
+    const containerHeight = photoZoomArea.clientHeight;
+    const imgWidth = viewerImage.offsetWidth;
+    const imgHeight = viewerImage.offsetHeight;
 
     if (!imgWidth || !imgHeight) return;
 
-    const fitScale =
-        getViewerFitScale();
+    const fitScale = getViewerFitScale();
+    const isQuarterTurn = Math.abs(viewerRotation) % 180 === 90;
+    const rotatedWidth = isQuarterTurn ? imgHeight : imgWidth;
+    const rotatedHeight = isQuarterTurn ? imgWidth : imgHeight;
 
-    const isQuarterTurn =
-        Math.abs(viewerRotation) % 180 === 90;
+    const scaledWidth = rotatedWidth * fitScale * viewerZoom;
+    const scaledHeight = rotatedHeight * fitScale * viewerZoom;
 
-    const rotatedWidth =
-        isQuarterTurn
-            ? imgHeight
-            : imgWidth;
+    const maxX = Math.max(0, (scaledWidth - containerWidth) / 2);
+    const maxY = Math.max(0, (scaledHeight - containerHeight) / 2);
 
-    const rotatedHeight =
-        isQuarterTurn
-            ? imgWidth
-            : imgHeight;
-
-    const scaledWidth =
-        rotatedWidth *
-        fitScale *
-        viewerZoom;
-
-    const scaledHeight =
-        rotatedHeight *
-        fitScale *
-        viewerZoom;
-
-    const maxX =
-        Math.max(
-            0,
-            (scaledWidth - containerWidth) / 2
-        );
-
-    const maxY =
-        Math.max(
-            0,
-            (scaledHeight - containerHeight) / 2
-        );
-
-    viewerPositionX =
-        Math.max(
-            -maxX,
-            Math.min(
-                maxX,
-                viewerPositionX
-            )
-        );
-
-    viewerPositionY =
-        Math.max(
-            -maxY,
-            Math.min(
-                maxY,
-                viewerPositionY
-            )
-        );
+    viewerPositionX = Math.max(-maxX, Math.min(maxX, viewerPositionX));
+    viewerPositionY = Math.max(-maxY, Math.min(maxY, viewerPositionY));
 }
 
 function updateViewerTransform() {
     clampViewerPosition();
-
-    const fitScale =
-        getViewerFitScale();
+    const fitScale = getViewerFitScale();
 
     viewerImage.style.transform =
         `translate(${viewerPositionX}px, ${viewerPositionY}px) rotate(${viewerRotation}deg) scale(${fitScale * viewerZoom})`;
 
-    viewerZoomText.textContent =
-        `${viewerZoom.toFixed(1)}×`;
+    viewerZoomText.textContent = `${viewerZoom.toFixed(1)}×`;
 }
 
 function resetViewerTransformSmooth() {
-    viewerImage.style.transition =
-        "transform 0.2s cubic-bezier(0.25, 1, 0.5, 1)";
-
-    adjacentImage.style.transition =
-        "transform 0.2s cubic-bezier(0.25, 1, 0.5, 1)";
+    viewerImage.style.transition = "transform 0.2s cubic-bezier(0.25, 1, 0.5, 1)";
+    adjacentImage.style.transition = "transform 0.2s cubic-bezier(0.25, 1, 0.5, 1)";
 
     viewerImage.style.transform =
         `translate(0px, 0px) rotate(${viewerRotation}deg) scale(${getViewerFitScale() * viewerZoom})`;
 
-    const deltaX =
-        swipeCurrentX - swipeStartX;
-
-    const windowWidth =
-        window.innerWidth;
+    const deltaX = swipeCurrentX - swipeStartX;
+    const windowWidth = window.innerWidth;
 
     if (deltaX < 0) {
-        adjacentImage.style.transform =
-            `translate(${windowWidth}px, 0px) scale(1)`;
+        adjacentImage.style.transform = `translate(${windowWidth}px, 0px) scale(1)`;
     } else {
-        adjacentImage.style.transform =
-            `translate(${-windowWidth}px, 0px) scale(1)`;
+        adjacentImage.style.transform = `translate(${-windowWidth}px, 0px) scale(1)`;
     }
 
     setTimeout(() => {
-        adjacentImage.style.display =
-            "none";
-
+        adjacentImage.style.display = "none";
         resetViewerZoom();
     }, 200);
 }
 
 function setViewerZoom(value) {
-    viewerZoom =
-        Math.max(
-            VIEWER_MIN_ZOOM,
-            Math.min(
-                VIEWER_MAX_ZOOM,
-                value
-            )
-        );
-
+    viewerZoom = Math.max(VIEWER_MIN_ZOOM, Math.min(VIEWER_MAX_ZOOM, value));
     updateViewerTransform();
 }
 
 function zoomViewerIn() {
-    viewerImage.style.transition =
-        "transform 0.2s ease-out";
-
-    setViewerZoom(
-        viewerZoom + 0.5
-    );
+    viewerImage.style.transition = "transform 0.2s ease-out";
+    setViewerZoom(viewerZoom + 0.5);
 }
 
 function zoomViewerOut() {
-    viewerImage.style.transition =
-        "transform 0.2s ease-out";
-
-    setViewerZoom(
-        viewerZoom - 0.5
-    );
+    viewerImage.style.transition = "transform 0.2s ease-out";
+    setViewerZoom(viewerZoom - 0.5);
 }
 
-
-// 초기화 버튼
 function resetViewerZoom() {
     viewerZoom = 1;
     viewerPositionX = 0;
     viewerPositionY = 0;
     viewerRotation = 0;
-
     updateViewerTransform();
 }
 
-
-// 회전 버튼
 function rotateViewerPhoto() {
     viewerRotation += 90;
-
-
     viewerPositionX = 0;
     viewerPositionY = 0;
-
-    viewerImage.style.transition =
-        "transform 0.2s ease-out";
-
+    viewerImage.style.transition = "transform 0.2s ease-out";
     updateViewerTransform();
 }
 
-
 async function prepareAdjacentImage(direction) {
-    const currentIndex =
-        allPhotosList.findIndex(
-            p => p.id === currentPhotoId
-        );
+    const currentIndex = allPhotosList.findIndex(p => p.id === currentPhotoId);
+    const targetIndex = currentIndex + direction;
 
-    const targetIndex =
-        currentIndex + direction;
-
-    if (
-        targetIndex < 0 ||
-        targetIndex >= allPhotosList.length
-    ) {
-        adjacentImage.style.display =
-            "none";
-
+    if (targetIndex < 0 || targetIndex >= allPhotosList.length) {
+        adjacentImage.style.display = "none";
         return false;
     }
 
-    const photo =
-        await getPhoto(
-            allPhotosList[targetIndex].id
-        );
-
+    const photo = await getPhoto(allPhotosList[targetIndex].id);
     if (!photo) return false;
 
     if (adjacentPhotoURL) {
-        URL.revokeObjectURL(
-            adjacentPhotoURL
-        );
+        URL.revokeObjectURL(adjacentPhotoURL);
     }
 
-    adjacentPhotoURL =
-        URL.createObjectURL(
-            photo.blob
-        );
-
-    adjacentImage.src =
-        adjacentPhotoURL;
-
-    adjacentImage.style.display =
-        "block";
+    adjacentPhotoURL = URL.createObjectURL(photo.blob);
+    adjacentImage.src = adjacentPhotoURL;
+    adjacentImage.style.display = "block";
 
     return true;
 }
 
-photoZoomArea.addEventListener(
-    "pointerdown",
-    function(event) {
-        if (
-            event.pointerType === "touch" &&
-            event.isPrimary === false
-        ) {
+photoZoomArea.addEventListener("pointerdown", function(event) {
+    if (event.pointerType === "touch" && event.isPrimary === false) {
+        return;
+    }
+
+    viewerImage.style.transition = "none";
+    adjacentImage.style.transition = "none";
+
+    if (viewerZoom > 1) {
+        viewerDragging = true;
+        viewerDragStartX = event.clientX;
+        viewerDragStartY = event.clientY;
+        viewerOriginX = viewerPositionX;
+        viewerOriginY = viewerPositionY;
+    } else {
+        isSwiping = true;
+        swipeStartX = event.clientX;
+        swipeStartY = event.clientY;
+        swipeCurrentX = event.clientX;
+    }
+
+    photoZoomArea.setPointerCapture(event.pointerId);
+});
+
+photoZoomArea.addEventListener("pointermove", async function(event) {
+    if (viewerZoom > 1 && viewerDragging) {
+        const dx = event.clientX - viewerDragStartX;
+        const dy = event.clientY - viewerDragStartY;
+
+        viewerPositionX = viewerOriginX + dx;
+        viewerPositionY = viewerOriginY + dy;
+
+        updateViewerTransform();
+
+    } else if (viewerZoom === 1 && isSwiping) {
+        swipeCurrentX = event.clientX;
+        const deltaX = swipeCurrentX - swipeStartX;
+        const windowWidth = window.innerWidth;
+
+        const currentIndex = allPhotosList.findIndex(p => p.id === currentPhotoId);
+        const isFirst = currentIndex === 0;
+        const isLast = currentIndex === allPhotosList.length - 1;
+
+        if ((isFirst && deltaX > 0) || (isLast && deltaX < 0)) {
+            viewerImage.style.transform =
+                `translate(0px, 0px) rotate(${viewerRotation}deg) scale(${getViewerFitScale() * viewerZoom})`;
+
+            adjacentImage.style.display = "none";
             return;
         }
 
-        viewerImage.style.transition =
-            "none";
+        const direction = deltaX < 0 ? 1 : -1;
 
-        adjacentImage.style.transition =
-            "none";
-
-        if (viewerZoom > 1) {
-            viewerDragging = true;
-
-            viewerDragStartX =
-                event.clientX;
-
-            viewerDragStartY =
-                event.clientY;
-
-            viewerOriginX =
-                viewerPositionX;
-
-            viewerOriginY =
-                viewerPositionY;
-
-        } else {
-            isSwiping = true;
-
-            swipeStartX =
-                event.clientX;
-
-            swipeStartY =
-                event.clientY;
-
-            swipeCurrentX =
-                event.clientX;
-        }
-
-        photoZoomArea.setPointerCapture(
-            event.pointerId
-        );
-    }
-);
-
-photoZoomArea.addEventListener(
-    "pointermove",
-    async function(event) {
         if (
-            viewerZoom > 1 &&
-            viewerDragging
+            adjacentImage.style.display === "none" ||
+            adjacentImage.dataset.dir != direction
         ) {
-            const dx =
-                event.clientX -
-                viewerDragStartX;
+            const loaded = await prepareAdjacentImage(direction);
+            if (!loaded) return;
 
-            const dy =
-                event.clientY -
-                viewerDragStartY;
-
-            viewerPositionX =
-                viewerOriginX + dx;
-
-            viewerPositionY =
-                viewerOriginY + dy;
-
-            updateViewerTransform();
-
-        } else if (
-            viewerZoom === 1 &&
-            isSwiping
-        ) {
-            swipeCurrentX =
-                event.clientX;
-
-            const deltaX =
-                swipeCurrentX -
-                swipeStartX;
-
-            const windowWidth =
-                window.innerWidth;
-
-            const currentIndex =
-                allPhotosList.findIndex(
-                    p => p.id === currentPhotoId
-                );
-
-            const isFirst =
-                currentIndex === 0;
-
-            const isLast =
-                currentIndex ===
-                allPhotosList.length - 1;
-
-            if (
-                (isFirst && deltaX > 0) ||
-                (isLast && deltaX < 0)
-            ) {
-                viewerImage.style.transform =
-                    `translate(0px, 0px) rotate(${viewerRotation}deg) scale(${getViewerFitScale() * viewerZoom})`;
-
-                adjacentImage.style.display =
-                    "none";
-
-                return;
-            }
-
-            const direction =
-                deltaX < 0 ? 1 : -1;
-
-            if (
-                adjacentImage.style.display ===
-                    "none" ||
-                adjacentImage.dataset.dir !=
-                    direction
-            ) {
-                const loaded =
-                    await prepareAdjacentImage(
-                        direction
-                    );
-
-                if (!loaded) return;
-
-                adjacentImage.dataset.dir =
-                    direction;
-            }
-
-            const adjacentOffsetX =
-                direction > 0
-                    ? windowWidth
-                    : -windowWidth;
-
-            viewerImage.style.transform =
-                `translate(${deltaX}px, 0px) rotate(${viewerRotation}deg) scale(${getViewerFitScale()})`;
-
-            adjacentImage.style.transform =
-                `translate(${adjacentOffsetX + deltaX}px, 0px) scale(1)`;
+            adjacentImage.dataset.dir = direction;
         }
+
+        const adjacentOffsetX = direction > 0 ? windowWidth : -windowWidth;
+
+        viewerImage.style.transform =
+            `translate(${deltaX}px, 0px) rotate(${viewerRotation}deg) scale(${getViewerFitScale()})`;
+
+        adjacentImage.style.transform =
+            `translate(${adjacentOffsetX + deltaX}px, 0px) scale(1)`;
     }
-);
+});
 
 function handleSwipeEnd() {
     if (viewerZoom > 1) {
         viewerDragging = false;
-
     } else if (isSwiping) {
         isSwiping = false;
 
-        const deltaX =
-            swipeCurrentX -
-            swipeStartX;
-
+        const deltaX = swipeCurrentX - swipeStartX;
         const threshold = 60;
 
-        const currentIndex =
-            allPhotosList.findIndex(
-                p => p.id === currentPhotoId
-            );
+        const currentIndex = allPhotosList.findIndex(p => p.id === currentPhotoId);
+        const isFirst = currentIndex === 0;
+        const isLast = currentIndex === allPhotosList.length - 1;
 
-        const isFirst =
-            currentIndex === 0;
-
-        const isLast =
-            currentIndex ===
-            allPhotosList.length - 1;
-
-        if (
-            deltaX < -threshold &&
-            !isLast
-        ) {
+        if (deltaX < -threshold && !isLast) {
             navigatePhoto(1);
-
-        } else if (
-            deltaX > threshold &&
-            !isFirst
-        ) {
+        } else if (deltaX > threshold && !isFirst) {
             navigatePhoto(-1);
-
         } else {
             resetViewerTransformSmooth();
         }
     }
 }
 
-photoZoomArea.addEventListener(
-    "pointerup",
-    handleSwipeEnd
-);
+photoZoomArea.addEventListener("pointerup", handleSwipeEnd);
+photoZoomArea.addEventListener("pointercancel", handleSwipeEnd);
 
-photoZoomArea.addEventListener(
-    "pointercancel",
-    handleSwipeEnd
-);
+photoZoomArea.addEventListener("touchstart", function(event) {
+    if (event.touches.length !== 2) return;
 
-photoZoomArea.addEventListener(
-    "touchstart",
-    function(event) {
-        if (event.touches.length !== 2) {
-            return;
-        }
+    event.preventDefault();
 
-        event.preventDefault();
+    isSwiping = false;
+    adjacentImage.style.display = "none";
+    viewerImage.style.transition = "none";
 
-        isSwiping = false;
+    viewerPinchStartDistance = getDistance(event.touches[0], event.touches[1]);
+    viewerPinchStartZoom = viewerZoom;
+}, { passive: false });
 
-        adjacentImage.style.display =
-            "none";
+photoZoomArea.addEventListener("touchmove", function(event) {
+    if (event.touches.length !== 2 || viewerPinchStartDistance <= 0) return;
 
-        viewerImage.style.transition =
-            "none";
+    event.preventDefault();
 
-        viewerPinchStartDistance =
-            getDistance(
-                event.touches[0],
-                event.touches[1]
-            );
+    const currentDistance = getDistance(event.touches[0], event.touches[1]);
+    const ratio = currentDistance / viewerPinchStartDistance;
 
-        viewerPinchStartZoom =
-            viewerZoom;
-    },
-    {
-        passive: false
+    setViewerZoom(viewerPinchStartZoom * ratio);
+}, { passive: false });
+
+photoZoomArea.addEventListener("touchend", function(event) {
+    if (event.touches.length < 2) {
+        viewerPinchStartDistance = 0;
     }
-);
+});
 
-photoZoomArea.addEventListener(
-    "touchmove",
-    function(event) {
-        if (
-            event.touches.length !== 2 ||
-            viewerPinchStartDistance <= 0
-        ) {
-            return;
-        }
+viewerImage.addEventListener("load", function() {
+    updateViewerTransform();
+});
 
-        event.preventDefault();
-
-        const currentDistance =
-            getDistance(
-                event.touches[0],
-                event.touches[1]
-            );
-
-        const ratio =
-            currentDistance /
-            viewerPinchStartDistance;
-
-        setViewerZoom(
-            viewerPinchStartZoom *
-            ratio
-        );
-    },
-    {
-        passive: false
-    }
-);
-
-photoZoomArea.addEventListener(
-    "touchend",
-    function(event) {
-        if (event.touches.length < 2) {
-            viewerPinchStartDistance = 0;
-        }
-    }
-);
-
-viewerImage.addEventListener(
-    "load",
-    function() {
+window.addEventListener("resize", function() {
+    if (!photoViewer.classList.contains("hidden")) {
         updateViewerTransform();
     }
-);
+});
 
-window.addEventListener(
-    "resize",
-    function() {
-        if (
-            !photoViewer.classList.contains(
-                "hidden"
-            )
-        ) {
-            updateViewerTransform();
-        }
+window.addEventListener("keydown", function(event) {
+    if (photoViewer.classList.contains("hidden")) return;
+
+    if (event.key === "ArrowLeft") {
+        prepareAdjacentImage(-1).then(success => {
+            if (success) navigatePhoto(-1);
+        });
+    } else if (event.key === "ArrowRight") {
+        prepareAdjacentImage(1).then(success => {
+            if (success) navigatePhoto(1);
+        });
+    } else if (event.key === "Escape") {
+        closePhotoViewer();
     }
-);
-
-window.addEventListener(
-    "keydown",
-    function(event) {
-        if (
-            photoViewer.classList.contains(
-                "hidden"
-            )
-        ) {
-            return;
-        }
-
-        if (event.key === "ArrowLeft") {
-            prepareAdjacentImage(-1)
-                .then(success => {
-                    if (success) {
-                        navigatePhoto(-1);
-                    }
-                });
-
-        } else if (event.key === "ArrowRight") {
-            prepareAdjacentImage(1)
-                .then(success => {
-                    if (success) {
-                        navigatePhoto(1);
-                    }
-                });
-
-        } else if (event.key === "Escape") {
-            closePhotoViewer();
-        }
-    }
-);
+});
 
 
 /* =========================================================
@@ -1726,60 +1279,34 @@ window.addEventListener(
 async function deleteCurrentPhoto() {
     if (currentPhotoId === null) return;
 
-    if (!confirm("이 사진을 삭제할까요?")) {
-        return;
-    }
+    if (!confirm("이 사진을 삭제할까요?")) return;
 
     try {
-        await deletePhotoFromDatabase(
-            currentPhotoId
-        );
-
+        await deletePhotoFromDatabase(currentPhotoId);
         closePhotoViewer();
-
         await loadGallery();
-
     } catch (error) {
-        console.error(
-            "사진 삭제 실패",
-            error
-        );
+        console.error("사진 삭제 실패", error);
     }
 }
 
 async function deleteAllPhotos() {
-    const photos =
-        await getAllPhotos();
+    const photos = await getAllPhotos();
 
     if (photos.length === 0) {
         alert("삭제할 사진이 없습니다.");
         return;
     }
 
-    if (
-        !confirm(
-            `사진 ${photos.length}장을 모두 삭제할까요?`
-        )
-    ) {
-        return;
-    }
+    if (!confirm(`사진 ${photos.length}장을 모두 삭제할까요?`)) return;
 
     try {
         await deleteAllPhotosFromDatabase();
-
         await loadGallery();
-
         alert("모든 사진이 삭제되었습니다.");
-
     } catch (error) {
-        console.error(
-            "전체 삭제 실패",
-            error
-        );
-
-        alert(
-            "사진을 삭제하지 못했습니다."
-        );
+        console.error("전체 삭제 실패", error);
+        alert("사진을 삭제하지 못했습니다.");
     }
 }
 
@@ -1788,117 +1315,31 @@ async function deleteAllPhotos() {
    이벤트 연결
 ========================================================= */
 
-cameraPowerButton.addEventListener(
-    "click",
-    toggleCamera
-);
-
-cameraPowerButtonOff.addEventListener(
-    "click",
-    toggleCamera
-);
-
-switchCameraButton.addEventListener(
-    "click",
-    switchCamera
-);
-
-galleryButton.addEventListener(
-    "click",
-    openGallery
-);
-
-galleryBackButton.addEventListener(
-    "click",
-    returnToCamera
-);
-
-retryCameraButton.addEventListener(
-    "click",
-    startCamera
-);
-
+cameraPowerButton.addEventListener("click", toggleCamera);
+cameraPowerButtonOff.addEventListener("click", toggleCamera);
+switchCameraButton.addEventListener("click", switchCamera);
+galleryButton.addEventListener("click", openGallery);
+galleryBackButton.addEventListener("click", returnToCamera);
+retryCameraButton.addEventListener("click", startCamera);
 
 // 촬영 & 연사
-captureButton.addEventListener(
-    "mousedown",
-    handleCaptureStart
-);
+captureButton.addEventListener("mousedown", handleCaptureStart);
+captureButton.addEventListener("mouseup", handleCaptureEnd);
+captureButton.addEventListener("mouseleave", handleCaptureEnd);
 
-captureButton.addEventListener(
-    "mouseup",
-    handleCaptureEnd
-);
+captureButton.addEventListener("touchstart", handleCaptureStart, { passive: false });
+captureButton.addEventListener("touchend", handleCaptureEnd, { passive: false });
+captureButton.addEventListener("touchcancel", handleCaptureEnd, { passive: false });
 
-captureButton.addEventListener(
-    "mouseleave",
-    handleCaptureEnd
-);
+viewerCloseButton.addEventListener("click", closePhotoViewer);
+viewerRotateButton.addEventListener("click", rotateViewerPhoto);
+deletePhotoButton.addEventListener("click", deleteCurrentPhoto);
+downloadPhotoButton.addEventListener("click", downloadCurrentPhoto);
+deleteAllButton.addEventListener("click", deleteAllPhotos);
 
-captureButton.addEventListener(
-    "touchstart",
-    handleCaptureStart,
-    {
-        passive: false
-    }
-);
-
-captureButton.addEventListener(
-    "touchend",
-    handleCaptureEnd,
-    {
-        passive: false
-    }
-);
-
-captureButton.addEventListener(
-    "touchcancel",
-    handleCaptureEnd,
-    {
-        passive: false
-    }
-);
-
-
-viewerCloseButton.addEventListener(
-    "click",
-    closePhotoViewer
-);
-
-viewerRotateButton.addEventListener(
-    "click",
-    rotateViewerPhoto
-);
-
-deletePhotoButton.addEventListener(
-    "click",
-    deleteCurrentPhoto
-);
-
-downloadPhotoButton.addEventListener(
-    "click",
-    downloadCurrentPhoto
-);
-
-deleteAllButton.addEventListener(
-    "click",
-    deleteAllPhotos
-);
-
-zoomInButton.addEventListener(
-    "click",
-    zoomViewerIn
-);
-
-zoomOutButton.addEventListener(
-    "click",
-    zoomViewerOut
-);
-
-resetZoomButton.addEventListener(
-    "click",
-    resetViewerZoom
-);
+zoomInButton.addEventListener("click", zoomViewerIn);
+zoomOutButton.addEventListener("click", zoomViewerOut);
+resetZoomButton.addEventListener("click", resetViewerZoom);
 
 
 /* =========================================================
@@ -1908,26 +1349,14 @@ resetZoomButton.addEventListener(
 async function initializeApp() {
     try {
         await openDatabase();
-
         stopCamera();
 
-        cameraUI.classList.add(
-            "hidden"
-        );
-
-        cameraOffScreen.classList.remove(
-            "hidden"
-        );
+        cameraUI.classList.add("hidden");
+        cameraOffScreen.classList.remove("hidden");
 
     } catch (error) {
-        console.error(
-            "앱 초기화 실패",
-            error
-        );
-
-        showCameraError(
-            "앱을 초기화할 수 없습니다."
-        );
+        console.error("앱 초기화 실패", error);
+        showCameraError("앱을 초기화할 수 없습니다.");
     }
 }
 
