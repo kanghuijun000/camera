@@ -107,13 +107,155 @@
 <script>
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
+
       navigator.serviceWorker.register("./sw.js")
         .then((registration) => {
-          console.log("Service Worker 등록 완료:", registration.scope);
+
+          console.log(
+            "Service Worker 등록 완료:",
+            registration.scope
+          );
+
+          // 주기적으로 새로운 Service Worker가 있는지 확인
+          setInterval(() => {
+            registration.update().catch(() => {});
+          }, 30000);
+
+          // 새로운 Service Worker가 발견되면 즉시 적용
+          registration.addEventListener("updatefound", () => {
+
+            const newWorker = registration.installing;
+
+            if (!newWorker) {
+              return;
+            }
+
+            newWorker.addEventListener("statechange", () => {
+
+              if (
+                newWorker.state === "installed" &&
+                navigator.serviceWorker.controller
+              ) {
+                newWorker.postMessage({
+                  type: "SKIP_WAITING"
+                });
+              }
+
+            });
+          });
+
         })
         .catch((error) => {
-          console.error("Service Worker 등록 실패:", error);
+          console.error(
+            "Service Worker 등록 실패:",
+            error
+          );
         });
+
+
+      // 새로운 Service Worker가 적용되면
+      // 현재 페이지를 자동으로 새로고침
+      let refreshing = false;
+
+      navigator.serviceWorker.addEventListener(
+        "controllerchange",
+        () => {
+
+          if (refreshing) {
+            return;
+          }
+
+          refreshing = true;
+          window.location.reload();
+        }
+      );
+
+
+      // ============================
+      // 앱 파일 자동 변경 감지
+      // ============================
+
+      let initialFiles = null;
+
+      async function getFileContents() {
+        const timestamp = Date.now();
+
+        const files = [
+          "./index.html?update=" + timestamp,
+          "./style.css?update=" + timestamp,
+          "./script.js?update=" + timestamp
+        ];
+
+        const results = await Promise.all(
+          files.map(async (file) => {
+
+            const response = await fetch(
+              file,
+              {
+                cache: "no-store"
+              }
+            );
+
+            if (!response.ok) {
+              throw new Error("업데이트 확인 실패");
+            }
+
+            return await response.text();
+          })
+        );
+
+        return results;
+      }
+
+
+      async function checkForChanges() {
+
+        try {
+
+          const currentFiles = await getFileContents();
+
+          // 최초 실행에서는 기준값만 저장
+          if (!initialFiles) {
+            initialFiles = currentFiles;
+            return;
+          }
+
+          // 파일 내용이 하나라도 달라졌다면
+          const changed =
+            currentFiles[0] !== initialFiles[0] ||
+            currentFiles[1] !== initialFiles[1] ||
+            currentFiles[2] !== initialFiles[2];
+
+          if (changed) {
+
+            console.log(
+              "새로운 앱 버전을 발견했습니다. 자동으로 업데이트합니다."
+            );
+
+            window.location.reload();
+          }
+
+        } catch (error) {
+
+          // 인터넷이 잠시 끊긴 경우에는
+          // 앱 사용을 방해하지 않음
+          console.log(
+            "업데이트 확인을 건너뜁니다."
+          );
+
+        }
+      }
+
+
+      // 최초 기준값 확인
+      checkForChanges();
+
+      // 10초마다 최신 파일 확인
+      setInterval(
+        checkForChanges,
+        10000
+      );
+
     });
   }
 </script>
