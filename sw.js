@@ -1,5 +1,4 @@
-```javascript
-const CACHE_NAME = "camera-app-v2";
+const CACHE_NAME = "camera-app-v3";
 
 const APP_FILES = [
   "./",
@@ -29,13 +28,28 @@ self.addEventListener("activate", (event) => {
           .filter((key) => key !== CACHE_NAME)
           .map((key) => caches.delete(key))
       );
-    }).then(() => self.clients.claim())
+    }).then(() => {
+      return self.clients.claim();
+    })
   );
 });
 
 // 요청 처리
 self.addEventListener("fetch", (event) => {
   const request = event.request;
+
+  // 최신 버전 확인용 요청은 캐시에 저장하지 않고
+  // 항상 네트워크에서 확인
+  if (request.cache === "no-store") {
+    event.respondWith(
+      fetch(request)
+        .catch(() => {
+          return caches.match(request);
+        })
+    );
+
+    return;
+  }
 
   // HTML 페이지는 항상 네트워크에서 최신 버전을 먼저 확인
   if (request.mode === "navigate") {
@@ -79,4 +93,3 @@ self.addEventListener("fetch", (event) => {
       })
   );
 });
-```
