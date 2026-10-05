@@ -882,6 +882,10 @@ function updateVideoModeUI() {
 
     videoModeButton.classList.toggle("active", videoMode);
 
+    // 사진 모드 → 동영상 아이콘
+    // 동영상 모드 → 사진 아이콘
+    videoModeButton.textContent = videoMode ? "📷" : "🎥";
+
     if (videoMode) {
         captureButton.classList.add("video-mode");
         captureButton.setAttribute("aria-label", "동영상 촬영");
