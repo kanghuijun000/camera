@@ -1,7 +1,3 @@
-/* =========================================================
-   기본 설정
-========================================================= */
-
 * {
     box-sizing: border-box;
     -webkit-tap-highlight-color: transparent;
@@ -16,7 +12,6 @@ body {
     overflow: hidden;
     background: #000;
     font-family: Arial, sans-serif;
-    touch-action: manipulation;
 }
 
 body {
@@ -59,51 +54,122 @@ button {
 ========================================================= */
 
 #cameraScreen {
-    display: none;
-    background: #000;
-}
-
-#cameraScreen.active {
     display: block;
+    background: #000;
 }
 
 #cameraPreview {
     position: absolute;
     inset: 0;
-
     width: 100%;
     height: 100%;
-
     object-fit: cover;
-
     background: #000;
-
     transform-origin: center center;
-
-    transition: opacity 0.08s ease;
 }
 
 
 /* =========================================================
-   카메라 UI 전체
+   카메라 UI
 ========================================================= */
 
 #cameraUI {
     position: absolute;
     inset: 0;
-
-    pointer-events: none;
-
     z-index: 10;
-}
-
-#cameraUI > * {
-    pointer-events: auto;
 }
 
 
 /* =========================================================
-   카메라 상단 바
+   카메라 OFF 화면
+========================================================= */
+
+#cameraOffScreen {
+    position: absolute;
+    inset: 0;
+    background: #000;
+    z-index: 20;
+}
+
+
+/* 꺼진 상태의 전원 버튼
+   이전 위치: 오른쪽 중앙
+   수정 위치: 왼쪽 상단
+========================================================= */
+
+#cameraPowerButtonOff {
+    position: absolute;
+
+    left: 14px;
+    top: 14px;
+    right: auto;
+    bottom: auto;
+
+    transform: none;
+
+    width: 46px;
+    height: 46px;
+
+    border-radius: 50%;
+
+    background: #1c1c1c;
+    color: #aaa;
+
+    font-size: 20px;
+
+    box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,0.08),
+        0 3px 12px rgba(0,0,0,0.7);
+
+    z-index: 30;
+}
+
+#cameraPowerButtonOff:active {
+    transform: scale(0.95);
+}
+
+
+/* =========================================================
+   상단 버튼
+========================================================= */
+
+.top-button {
+    position: absolute;
+
+    top: 14px;
+
+    width: 46px;
+    height: 46px;
+
+    border-radius: 50%;
+
+    background: rgba(0,0,0,0.48);
+
+    color: #fff;
+
+    font-size: 21px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+
+    transition:
+        transform 0.12s ease,
+        background 0.12s ease;
+
+    z-index: 25;
+}
+
+.top-button:active {
+    transform: scale(0.94);
+}
+
+
+/* =========================================================
+   상단 바
 ========================================================= */
 
 .top-bar {
@@ -126,60 +192,25 @@ button {
 
 
 /* =========================================================
-   상단 버튼 공통
-========================================================= */
-
-.top-button {
-    position: absolute;
-
-    top: 14px;
-
-    width: 46px;
-    height: 46px;
-
-    border-radius: 50%;
-
-    background: rgba(0, 0, 0, 0.48);
-
-    color: #fff;
-
-    font-size: 21px;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-
-    z-index: 25;
-
-    transition:
-        transform 0.12s ease,
-        background 0.12s ease;
-}
-
-.top-button:active {
-    transform: scale(0.94);
-}
-
-
-/* =========================================================
-   전원 버튼
+   카메라 전원 버튼
+   켜진 화면에서도 왼쪽 상단 고정
 ========================================================= */
 
 #cameraPowerButton {
-    left: 14px;
-    right: auto;
+    position: absolute;
 
+    left: 14px;
     top: 14px;
+
+    right: auto;
+    bottom: auto;
 
     width: 46px;
     height: 46px;
 
     border-radius: 50%;
 
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(0,0,0,0.5);
 
     color: #fff;
 
@@ -189,7 +220,7 @@ button {
 }
 
 #cameraPowerButton:active {
-    transform: scale(0.94);
+    transform: scale(0.95);
 }
 
 
@@ -211,7 +242,7 @@ button {
 
     border-radius: 18px;
 
-    background: rgba(0, 0, 0, 0.48);
+    background: rgba(0,0,0,0.48);
 
     color: #fff;
 
@@ -228,23 +259,46 @@ button {
 
 
 /* =========================================================
-   동영상 모드 버튼
+   사진 / 동영상 모드 전환 버튼
 ========================================================= */
 
 #videoModeButton {
-    right: 14px;
-    left: auto;
+    position: absolute;
 
     top: 14px;
+    right: 14px;
+
+    left: auto;
+
+    width: 46px;
+    height: 46px;
+
+    border-radius: 50%;
+
+    background: rgba(0,0,0,0.48);
+
+    color: #fff;
+
+    font-size: 21px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    z-index: 30;
 }
 
-.video-mode-button.active {
-    background: rgba(220, 40, 40, 0.82);
+#videoModeButton:active {
+    transform: scale(0.94);
+}
+
+#videoModeButton.active {
+    background: rgba(190,0,0,0.72);
 }
 
 
 /* =========================================================
-   상단 여백용 요소
+   상단 여백
 ========================================================= */
 
 .top-bar-spacer {
@@ -266,34 +320,25 @@ button {
     height: 150px;
 
     z-index: 20;
-
-    pointer-events: none;
-}
-
-.camera-controls > * {
-    pointer-events: auto;
 }
 
 
 /* =========================================================
-   갤러리 버튼
+   갤러리 열기
 ========================================================= */
 
-.camera-controls .gallery-open-button {
+.gallery-open-button {
     position: absolute;
 
     left: 18px;
     bottom: 31px;
-
-    right: auto;
-    top: auto;
 
     width: 58px;
     height: 58px;
 
     border-radius: 16px;
 
-    background: rgba(0, 0, 0, 0.48);
+    background: rgba(0,0,0,0.48);
 
     color: #fff;
 
@@ -312,25 +357,25 @@ button {
     z-index: 25;
 }
 
-.camera-controls .gallery-open-button small {
+.gallery-open-button small {
     display: block;
 
     font-size: 9px;
     line-height: 1;
 
-    color: rgba(255, 255, 255, 0.9);
+    color: rgba(255,255,255,0.9);
 }
 
-.camera-controls .gallery-open-button:active {
+.gallery-open-button:active {
     transform: scale(0.94);
 }
 
 
 /* =========================================================
-   전/후면 카메라 전환
+   카메라 전환
 ========================================================= */
 
-.camera-controls #switchCameraButton {
+#switchCameraButton {
     position: absolute;
 
     right: 18px;
@@ -344,7 +389,7 @@ button {
 
     border-radius: 50%;
 
-    background: rgba(0, 0, 0, 0.48);
+    background: rgba(0,0,0,0.48);
 
     color: #fff;
 
@@ -360,13 +405,13 @@ button {
     z-index: 25;
 }
 
-.camera-controls #switchCameraButton:active {
+#switchCameraButton:active {
     transform: scale(0.94);
 }
 
 
 /* =========================================================
-   셔터 컨테이너
+   셔터 영역
 ========================================================= */
 
 .shutter-container {
@@ -379,8 +424,6 @@ button {
     height: 150px;
 
     transform: translateX(-50%);
-
-    pointer-events: none;
 
     z-index: 30;
 }
@@ -407,15 +450,13 @@ button {
 
     background: #fff;
 
-    border: 5px solid rgba(255, 255, 255, 0.42);
+    border: 5px solid rgba(255,255,255,0.42);
 
     box-shadow:
-        0 0 0 3px rgba(0, 0, 0, 0.35),
-        0 5px 18px rgba(0, 0, 0, 0.5);
+        0 0 0 3px rgba(0,0,0,0.35),
+        0 5px 18px rgba(0,0,0,0.5);
 
     z-index: 35;
-
-    pointer-events: auto;
 }
 
 .capture-button:active {
@@ -434,11 +475,11 @@ button {
 
 
 /* =========================================================
-   동영상 촬영 상태
+   동영상 촬영 중 셔터
 ========================================================= */
 
 .capture-button.video-mode {
-    border-color: rgba(255, 255, 255, 0.4);
+    border-color: rgba(255,255,255,0.4);
 }
 
 .capture-button.video-mode span {
@@ -451,7 +492,7 @@ button {
 
 
 /* =========================================================
-   동영상 녹화 타이머
+   동영상 타이머
 ========================================================= */
 
 .video-timer {
@@ -468,7 +509,7 @@ button {
 
     border-radius: 16px;
 
-    background: rgba(190, 0, 0, 0.72);
+    background: rgba(190,0,0,0.72);
 
     color: #fff;
 
@@ -497,7 +538,7 @@ button {
 
     border-radius: 16px;
 
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(0,0,0,0.6);
 
     color: #fff;
 
@@ -508,80 +549,12 @@ button {
     white-space: nowrap;
 }
 
-#burstCounter {
-    position: absolute;
-
-    left: 50%;
-    bottom: 120px;
-
-    transform: translateX(-50%);
-
-    padding: 6px 12px;
-
-    border-radius: 16px;
-
-    background: rgba(0, 0, 0, 0.6);
-
-    color: #fff;
-
-    font-size: 14px;
-
-    z-index: 40;
-}
-
-
-/* =========================================================
-   카메라 OFF 화면
-========================================================= */
-
-#cameraOffScreen {
-    position: absolute;
-
-    inset: 0;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    background: #000;
-
-    z-index: 100;
-}
-
-#cameraPowerButtonOff {
-    position: absolute;
-
-    right: 14px;
-    top: 50%;
-
-    transform: translateY(-50%);
-
-    width: 42px;
-    height: 86px;
-
-    border-radius: 21px;
-
-    background: #1c1c1c;
-
-    color: #aaa;
-
-    box-shadow:
-        inset 0 0 0 1px rgba(255, 255, 255, 0.08),
-        0 3px 12px rgba(0, 0, 0, 0.7);
-
-    font-size: 20px;
-}
-
-#cameraPowerButtonOff:active {
-    transform: translateY(-50%) scale(0.95);
-}
-
 
 /* =========================================================
    카메라 오류
 ========================================================= */
 
-.camera-error {
+#cameraError {
     position: absolute;
 
     left: 20px;
@@ -594,17 +567,15 @@ button {
 
     border-radius: 16px;
 
-    background: rgba(20, 20, 20, 0.94);
+    background: rgba(20,20,20,0.94);
 
     text-align: center;
 
-    z-index: 150;
+    z-index: 100;
 }
 
 #cameraErrorText {
     margin: 0 0 14px;
-
-    line-height: 1.5;
 }
 
 #retryCameraButton {
@@ -619,7 +590,7 @@ button {
 
 
 /* =========================================================
-   갤러리 화면
+   갤러리
 ========================================================= */
 
 #galleryScreen {
@@ -636,7 +607,7 @@ button {
 
 
 /* =========================================================
-   갤러리 상단 헤더
+   갤러리 헤더
 ========================================================= */
 
 .gallery-header {
@@ -654,7 +625,7 @@ button {
 
     padding: 0 14px;
 
-    background: rgba(15, 15, 15, 0.97);
+    background: rgba(15,15,15,0.97);
 
     z-index: 30;
 }
@@ -665,7 +636,7 @@ button {
     left: 50%;
     top: 50%;
 
-    transform: translate(-50%, -50%);
+    transform: translate(-50%,-50%);
 
     margin: 0;
 
@@ -675,12 +646,7 @@ button {
     white-space: nowrap;
 }
 
-
-/* =========================================================
-   갤러리 뒤로가기
-========================================================= */
-
-.header-button {
+.gallery-header button {
     width: 42px;
     height: 42px;
 
@@ -690,42 +656,27 @@ button {
 
     color: #fff;
 
-    font-size: 24px;
+    font-size: 19px;
+}
 
+.header-button {
     display: flex;
     align-items: center;
     justify-content: center;
-
-    z-index: 2;
 }
-
-.header-button:active {
-    transform: scale(0.94);
-}
-
-
-/* =========================================================
-   전체 삭제
-========================================================= */
 
 .delete-all-button {
+    width: auto !important;
     min-width: 72px;
-    height: 38px;
 
     padding: 0 10px;
 
-    border-radius: 10px;
+    border-radius: 10px !important;
 
-    background: #252525;
+    color: #ff5b5b !important;
 
-    color: #ff5b5b;
-
-    font-size: 13px;
+    font-size: 13px !important;
     font-weight: 600;
-}
-
-.delete-all-button:active {
-    transform: scale(0.95);
 }
 
 
@@ -746,7 +697,7 @@ button {
 
     background: #151515;
 
-    z-index: 20;
+    z-index: 15;
 
     display: flex;
     flex-direction: column;
@@ -769,9 +720,7 @@ button {
 
 .gallery-filter-button.active {
     background: #fff;
-
     color: #000;
-
     font-weight: 700;
 }
 
@@ -788,18 +737,19 @@ button {
     position: absolute;
 
     top: 64px;
-    left: 78px;
+    left: 0;
     right: 0;
     bottom: 0;
 
     padding: 8px;
+    padding-left: 86px;
 
     overflow-y: auto;
     overflow-x: hidden;
 
     display: grid;
 
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0,1fr));
 
     align-content: start;
 
@@ -808,6 +758,13 @@ button {
     margin: 0;
 
     -webkit-overflow-scrolling: touch;
+
+    scrollbar-width: none;
+}
+
+.gallery-grid::-webkit-scrollbar {
+    width: 0;
+    height: 0;
 }
 
 
@@ -847,25 +804,18 @@ button {
 
 
 /* =========================================================
-   동영상 썸네일
+   갤러리 동영상
 ========================================================= */
 
 .gallery-video {
-    position: relative;
-
-    width: 100%;
-    height: 100%;
-
-    background: #000;
-}
-
-.gallery-video video {
     width: 100%;
     height: 100%;
 
     display: block;
 
     object-fit: cover;
+
+    background: #000;
 }
 
 .gallery-video-play {
@@ -874,14 +824,14 @@ button {
     left: 50%;
     top: 50%;
 
-    transform: translate(-50%, -50%);
+    transform: translate(-50%,-50%);
 
     width: 40px;
     height: 40px;
 
     border-radius: 50%;
 
-    background: rgba(0, 0, 0, 0.55);
+    background: rgba(0,0,0,0.55);
 
     display: flex;
     align-items: center;
@@ -901,7 +851,7 @@ button {
    빈 갤러리
 ========================================================= */
 
-.empty-gallery {
+#emptyGallery {
     position: absolute;
 
     top: 64px;
@@ -923,14 +873,10 @@ button {
     z-index: 5;
 }
 
-.empty-icon {
+#emptyIcon {
     font-size: 46px;
 
     margin-bottom: 12px;
-}
-
-.empty-gallery p {
-    margin: 0;
 }
 
 #emptyText {
@@ -939,18 +885,8 @@ button {
 
 
 /* =========================================================
-   사진 상세 뷰어
+   사진/영상 상세 뷰어
 ========================================================= */
-
-.photo-viewer {
-    position: fixed;
-
-    inset: 0;
-
-    background: #000;
-
-    z-index: 200;
-}
 
 #photoViewer {
     position: fixed;
@@ -960,27 +896,6 @@ button {
     background: #000;
 
     z-index: 200;
-}
-
-
-/* =========================================================
-   이미지 / 동영상 영역
-========================================================= */
-
-.photo-zoom-area {
-    position: absolute;
-
-    inset: 0;
-
-    overflow: hidden;
-
-    touch-action: none;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    z-index: 201;
 }
 
 #photoZoomArea {
@@ -993,32 +908,50 @@ button {
     touch-action: none;
 
     display: flex;
+
     align-items: center;
     justify-content: center;
 
     z-index: 201;
 }
 
+
+/*
+   중요:
+   JS가 transform을 직접 제어한다.
+
+   기존에는 top:50%, left:50%였는데
+   JS의 translate()와 충돌해서
+   사진/영상이 중앙이 아니라 구석에 박히는 문제가 발생했다.
+
+   따라서 뷰어 요소 자체를 전체 영역으로 만들고
+   object-fit: contain으로 실제 미디어를 중앙에 맞춘다.
+*/
+
 #viewerImage,
 #viewerVideo {
     position: absolute;
 
-    top: 50%;
-    left: 50%;
+    top: 0;
+    left: 0;
 
-    width: auto;
-    height: auto;
+    width: 100%;
+    height: 100%;
 
-    max-width: 100%;
-    max-height: 100%;
+    max-width: none;
+    max-height: none;
+
+    object-fit: contain;
 
     transform-origin: center center;
 
     user-select: none;
 
+    -webkit-user-select: none;
     -webkit-user-drag: none;
 
-    object-fit: contain;
+    margin: 0;
+    padding: 0;
 }
 
 #viewerImage {
@@ -1029,8 +962,9 @@ button {
     background: #000;
 }
 
-#viewerVideo.hidden {
-    display: none;
+#viewerVideo.hidden,
+#viewerImage.hidden {
+    display: none !important;
 }
 
 
@@ -1050,6 +984,7 @@ button {
     padding: 10px 14px;
 
     display: flex;
+
     align-items: center;
     justify-content: space-between;
 
@@ -1081,7 +1016,7 @@ button {
 
     border-radius: 50%;
 
-    background: rgba(20, 20, 20, 0.62);
+    background: rgba(20,20,20,0.62);
 
     color: #fff;
 
@@ -1140,13 +1075,15 @@ button {
 
     background: linear-gradient(
         to top,
-        rgba(0, 0, 0, 0.78),
-        rgba(0, 0, 0, 0)
+        rgba(0,0,0,0.78),
+        rgba(0,0,0,0)
     );
 
     z-index: 230;
+}
 
-    pointer-events: auto;
+.viewer-controls button {
+    flex-shrink: 0;
 }
 
 
@@ -1160,7 +1097,7 @@ button {
 
     border-radius: 50%;
 
-    background: rgba(25, 25, 25, 0.72);
+    background: rgba(25,25,25,0.72);
 
     color: #fff;
 
@@ -1185,14 +1122,15 @@ button {
 
     text-align: center;
 
-    font-size: 13px;
-
     color: #fff !important;
+
+    font-size: 13px;
+    font-weight: 600;
 }
 
 
 /* =========================================================
-   초기화 버튼
+   줌 초기화
 ========================================================= */
 
 .viewer-reset-button {
@@ -1203,7 +1141,7 @@ button {
 
     border-radius: 10px;
 
-    background: rgba(25, 25, 25, 0.72);
+    background: rgba(25,25,25,0.72);
 
     color: #fff;
 
@@ -1232,11 +1170,12 @@ button {
 
     border-radius: 50%;
 
-    background: rgba(0, 0, 0, 0.62);
+    background: rgba(0,0,0,0.62);
 
     color: #fff;
 
     display: flex;
+
     align-items: center;
     justify-content: center;
 
@@ -1268,6 +1207,7 @@ button {
     height: 24px;
 
     display: flex;
+
     align-items: center;
 
     z-index: 225;
@@ -1286,7 +1226,7 @@ button {
 
 
 /* =========================================================
-   삭제 / 다운로드 색상
+   삭제 / 다운로드
 ========================================================= */
 
 #deletePhotoButton {
@@ -1304,22 +1244,27 @@ button {
 
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
 
-    .camera-controls {
-        padding-bottom: env(safe-area-inset-bottom);
-    }
-
     .capture-button {
         bottom: calc(28px + env(safe-area-inset-bottom));
     }
 
-    .camera-controls .gallery-open-button {
+    .gallery-open-button {
         bottom: calc(31px + env(safe-area-inset-bottom));
     }
 
-    .camera-controls #switchCameraButton {
+    #switchCameraButton {
         bottom: calc(31px + env(safe-area-inset-bottom));
     }
 
+    #cameraPowerButton {
+        top: 14px;
+        bottom: auto;
+    }
+
+    #cameraPowerButtonOff {
+        top: 14px;
+        bottom: auto;
+    }
 }
 
 
@@ -1330,9 +1275,8 @@ button {
 @media screen and (orientation: portrait) {
 
     .gallery-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(3, minmax(0,1fr));
     }
-
 }
 
 
@@ -1343,7 +1287,7 @@ button {
 @media screen and (orientation: landscape) {
 
     .gallery-grid {
-        grid-template-columns: repeat(5, minmax(0, 1fr));
+        grid-template-columns: repeat(5, minmax(0,1fr));
     }
 
     .gallery-filter-sidebar {
@@ -1351,35 +1295,34 @@ button {
     }
 
     .gallery-grid {
-        left: 82px;
+        padding-left: 90px;
     }
 
-    .empty-gallery {
+    #emptyGallery {
         left: 82px;
     }
-
 }
 
 
 /* =========================================================
-   작은 화면 대응
+   작은 화면
 ========================================================= */
 
 @media screen and (max-width: 360px) {
 
-    .top-button,
-    #cameraPowerButton {
+    #cameraPowerButton,
+    #cameraPowerButtonOff,
+    #videoModeButton {
         width: 42px;
         height: 42px;
     }
 
-    #cameraPowerButton {
-        top: 14px;
+    #cameraPowerButton,
+    #cameraPowerButtonOff {
         left: 12px;
     }
 
     #videoModeButton {
-        top: 14px;
         right: 12px;
     }
 
@@ -1393,7 +1336,7 @@ button {
         font-size: 13px;
     }
 
-    .camera-controls .gallery-open-button {
+    .gallery-open-button {
         left: 14px;
         bottom: 29px;
 
@@ -1401,7 +1344,7 @@ button {
         height: 54px;
     }
 
-    .camera-controls #switchCameraButton {
+    #switchCameraButton {
         right: 14px;
         bottom: 29px;
 
@@ -1419,12 +1362,10 @@ button {
     }
 
     .gallery-grid {
-        left: 72px;
-
-        padding: 6px;
+        padding-left: 78px;
     }
 
-    .empty-gallery {
+    #emptyGallery {
         left: 72px;
     }
 
@@ -1435,8 +1376,7 @@ button {
 
     .delete-all-button {
         min-width: 68px;
-
-        font-size: 12px;
+        font-size: 12px !important;
     }
 
     .viewer-top {
@@ -1454,7 +1394,6 @@ button {
 
         font-size: 17px;
     }
-
 }
 
 
@@ -1464,11 +1403,20 @@ button {
 
 @media screen and (max-width: 320px) {
 
-    .camera-controls .gallery-open-button {
+    #cameraPowerButton,
+    #cameraPowerButtonOff {
         left: 10px;
     }
 
-    .camera-controls #switchCameraButton {
+    #videoModeButton {
+        right: 10px;
+    }
+
+    .gallery-open-button {
+        left: 10px;
+    }
+
+    #switchCameraButton {
         right: 10px;
     }
 
@@ -1482,18 +1430,17 @@ button {
     }
 
     .gallery-grid {
-        left: 68px;
+        padding-left: 74px;
     }
 
-    .empty-gallery {
+    #emptyGallery {
         left: 68px;
     }
-
 }
 
 
 /* =========================================================
-   터치 환경 최적화
+   터치 환경
 ========================================================= */
 
 @media (hover: none) {
@@ -1501,19 +1448,4 @@ button {
     button:hover {
         filter: none;
     }
-
-}
-
-
-/* =========================================================
-   스크롤바 숨김
-========================================================= */
-
-.gallery-grid::-webkit-scrollbar {
-    width: 0;
-    height: 0;
-}
-
-.gallery-grid {
-    scrollbar-width: none;
 }
