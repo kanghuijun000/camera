@@ -34,6 +34,15 @@ const zoomInButton = document.getElementById("zoomInButton");
 const zoomOutButton = document.getElementById("zoomOutButton");
 const resetZoomButton = document.getElementById("resetZoomButton");
 const viewerZoomText = document.getElementById("viewerZoomText");
+const videoModeButton = document.getElementById("videoModeButton");
+const videoTimer = document.getElementById("videoTimer");
+const viewerVideo = document.getElementById("viewerVideo");
+const videoPlayButton = document.getElementById("videoPlayButton");
+const videoTimelineWrap = document.getElementById("videoTimelineWrap");
+const videoTimeline = document.getElementById("videoTimeline");
+const galleryAllButton = document.getElementById("galleryAllButton");
+const galleryPhotoButton = document.getElementById("galleryPhotoButton");
+const galleryVideoButton = document.getElementById("galleryVideoButton");
 
 
 /* =========================================================
@@ -78,6 +87,32 @@ let currentPhotoId = null;
 let currentPhotoURL = null;
 let galleryObjectURLs = [];
 let allPhotosList = [];
+let allMediaList = [];
+let galleryFilter = "all";
+
+let videoMode = false;
+let mediaRecorder = null;
+let recordedVideoChunks = [];
+let videoTimerInterval = null;
+let videoStartTime = 0;
+let currentViewerType = "photo";
+let currentViewerVideoURL = null;
+
+let adjacentVideo = document.createElement("video");
+adjacentVideo.style.position = "absolute";
+adjacentVideo.style.top = "0";
+adjacentVideo.style.left = "0";
+adjacentVideo.style.width = "100%";
+adjacentVideo.style.height = "100%";
+adjacentVideo.style.objectFit = "contain";
+adjacentVideo.style.display = "none";
+adjacentVideo.style.pointerEvents = "none";
+adjacentVideo.muted = true;
+adjacentVideo.playsInline = true;
+
+if (photoZoomArea) {
+    photoZoomArea.appendChild(adjacentVideo);
+}
 
 
 /* =========================================================
@@ -152,7 +187,8 @@ function savePhoto(blob) {
         const store = transaction.objectStore("photos");
         const request = store.add({
             blob: blob,
-            date: Date.now()
+            date: Date.now(),
+            type: "photo"
         });
 
         request.onsuccess = () => resolve(request.result);
@@ -173,7 +209,8 @@ function saveMultiplePhotos(blobs) {
         blobs.forEach(blob => {
             store.add({
                 blob: blob,
-                date: Date.now()
+                date: Date.now(),
+                type: "photo"
             });
         });
     });
@@ -281,6 +318,7 @@ async function startCamera() {
         cameraEnabled = false;
         cameraUI.classList.add("hidden");
         cameraOffScreen.classList.remove("hidden");
+        updateVideoModeUI();
         showCameraError(
             "카메라를 사용할 수 없습니다. 카메라 권한을 확인해주세요."
         );
@@ -302,6 +340,11 @@ function stopCamera() {
 }
 
 function turnCameraOff() {
+    if (mediaRecorder) {
+        stopVideoRecording();
+        return;
+    }
+
     stopCamera();
     cameraUI.classList.add("hidden");
     cameraOffScreen.classList.remove("hidden");
@@ -322,7 +365,7 @@ async function toggleCamera() {
 }
 
 async function switchCamera() {
-    if (!cameraEnabled) return;
+    if (!cameraEnabled || mediaRecorder) return;
 
     currentFacingMode =
         currentFacingMode === "environment"
@@ -686,6 +729,11 @@ function handleCaptureStart(event) {
 
     if (!cameraEnabled) return;
 
+    if (videoMode) {
+        handleVideoCapture();
+        return;
+    }
+
     isBurstMode = false;
 
     burstTimer = setTimeout(() => {
@@ -697,6 +745,10 @@ function handleCaptureStart(event) {
 function handleCaptureEnd(event) {
     if (event && event.cancelable) {
         event.preventDefault();
+    }
+
+    if (videoMode) {
+        return;
     }
 
     clearTimeout(burstTimer);
@@ -783,6 +835,173 @@ async function processAndSaveBurstCanvases(canvases) {
 
 
 /* =========================================================
+   동영상 촬영
+========================================================= */
+
+function formatVideoTime(totalSeconds) {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = Math.floor(totalSeconds % 60);
+    return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function updateVideoTimer() {
+    if (!videoTimer) return;
+
+    const elapsed = (Date.now() - videoStartTime) / 1000;
+    videoTimer.textContent = formatVideoTime(elapsed);
+}
+
+function startVideoTimer() {
+    stopVideoTimer();
+    videoStartTime = Date.now();
+    updateVideoTimer();
+    videoTimerInterval = setInterval(updateVideoTimer, 250);
+}
+
+function stopVideoTimer() {
+    if (videoTimerInterval) {
+        clearInterval(videoTimerInterval);
+        videoTimerInterval = null;
+    }
+}
+
+function getVideoMimeType() {
+    const types = [
+        "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
+        "video/mp4",
+        "video/webm;codecs=vp9,opus",
+        "video/webm;codecs=vp8,opus",
+        "video/webm"
+    ];
+
+    return types.find(type => MediaRecorder.isTypeSupported(type)) || "";
+}
+
+function updateVideoModeUI() {
+    if (!videoModeButton || !captureButton || !videoTimer) return;
+
+    videoModeButton.classList.toggle("active", videoMode);
+
+    if (videoMode) {
+        captureButton.classList.add("video-mode");
+        captureButton.setAttribute("aria-label", "동영상 촬영");
+    } else {
+        captureButton.classList.remove("video-mode");
+        captureButton.setAttribute("aria-label", "촬영");
+        videoTimer.style.display = "none";
+        videoTimer.textContent = "00:00";
+    }
+}
+
+function toggleVideoMode() {
+    if (!cameraEnabled || mediaRecorder) return;
+
+    videoMode = !videoMode;
+    updateVideoModeUI();
+}
+
+function handleVideoCapture() {
+    if (!cameraStream) return;
+
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+        stopVideoRecording();
+    } else {
+        startVideoRecording();
+    }
+}
+
+function startVideoRecording() {
+    if (!cameraStream || !window.MediaRecorder) {
+        alert("이 브라우저에서는 동영상 촬영을 지원하지 않습니다.");
+        return;
+    }
+
+    const mimeType = getVideoMimeType();
+
+    try {
+        mediaRecorder = mimeType
+            ? new MediaRecorder(cameraStream, { mimeType })
+            : new MediaRecorder(cameraStream);
+    } catch (error) {
+        console.error("동영상 녹화 시작 실패", error);
+        alert("동영상 촬영을 시작할 수 없습니다.");
+        mediaRecorder = null;
+        return;
+    }
+
+    recordedVideoChunks = [];
+
+    mediaRecorder.ondataavailable = event => {
+        if (event.data && event.data.size > 0) {
+            recordedVideoChunks.push(event.data);
+        }
+    };
+
+    mediaRecorder.onerror = event => {
+        console.error("동영상 녹화 오류", event.error);
+        stopVideoTimer();
+        videoTimer.style.display = "none";
+        mediaRecorder = null;
+        recordedVideoChunks = [];
+    };
+
+    mediaRecorder.onstop = async () => {
+        stopVideoTimer();
+
+        const actualType =
+            mediaRecorder && mediaRecorder.mimeType
+                ? mediaRecorder.mimeType
+                : mimeType || "video/webm";
+
+        const blob = new Blob(recordedVideoChunks, { type: actualType });
+
+        mediaRecorder = null;
+        recordedVideoChunks = [];
+
+        if (blob.size > 0) {
+            try {
+                await saveVideo(blob);
+                await loadGallery();
+            } catch (error) {
+                console.error("동영상 저장 실패", error);
+            }
+        }
+
+        videoTimer.style.display = "none";
+        videoTimer.textContent = "00:00";
+    };
+
+    mediaRecorder.start();
+    videoTimer.style.display = "block";
+    startVideoTimer();
+}
+
+function stopVideoRecording() {
+    if (!mediaRecorder) return;
+
+    if (mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+    }
+}
+
+function saveVideo(blob) {
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction("photos", "readwrite");
+        const store = transaction.objectStore("photos");
+
+        const request = store.add({
+            blob,
+            date: Date.now(),
+            type: "video"
+        });
+
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+
+/* =========================================================
    갤러리 화면
 ========================================================= */
 
@@ -795,6 +1014,24 @@ async function openGallery() {
     cameraScreen.classList.remove("active");
     galleryScreen.classList.add("active");
 
+    galleryFilter = "all";
+    updateGalleryFilterUI();
+    await loadGallery();
+}
+
+function updateGalleryFilterUI() {
+    if (!galleryAllButton || !galleryPhotoButton || !galleryVideoButton) return;
+
+    galleryAllButton.classList.toggle("active", galleryFilter === "all");
+    galleryPhotoButton.classList.toggle("active", galleryFilter === "photo");
+    galleryVideoButton.classList.toggle("active", galleryFilter === "video");
+}
+
+async function setGalleryFilter(filter) {
+    if (galleryFilter === filter) return;
+
+    galleryFilter = filter;
+    updateGalleryFilterUI();
     await loadGallery();
 }
 
@@ -824,28 +1061,73 @@ async function loadGallery() {
         emptyText.textContent = "저장된 사진이 없습니다.";
         emptyGallery.classList.remove("hidden");
         allPhotosList = [];
+        updateGalleryFilterUI();
         return;
     }
 
     emptyGallery.classList.add("hidden");
 
     photos.sort((a, b) => b.date - a.date);
-    allPhotosList = photos;
+    allMediaList = photos;
 
-    photos.forEach(photo => {
+    const filteredPhotos = photos.filter(photo => {
+        if (galleryFilter === "photo") {
+            return photo.type !== "video";
+        }
+
+        if (galleryFilter === "video") {
+            return photo.type === "video";
+        }
+
+        return true;
+    });
+
+    allPhotosList = galleryFilter === "all" ? allMediaList : filteredPhotos;
+
+    if (filteredPhotos.length === 0) {
+        emptyIcon.textContent = galleryFilter === "video" ? "🎥" : "📷";
+        emptyText.textContent =
+            galleryFilter === "video"
+                ? "저장된 동영상이 없습니다."
+                : "저장된 사진이 없습니다.";
+        emptyGallery.classList.remove("hidden");
+        return;
+    }
+
+    filteredPhotos.forEach(itemData => {
         const item = document.createElement("div");
         item.className = "gallery-item";
 
-        const image = document.createElement("img");
-        const url = URL.createObjectURL(photo.blob);
-        galleryObjectURLs.push(url);
+        if (itemData.type === "video") {
+            const video = document.createElement("video");
+            const url = URL.createObjectURL(itemData.blob);
+            galleryObjectURLs.push(url);
 
-        image.src = url;
-        item.appendChild(image);
+            video.className = "gallery-video";
+            video.src = url;
+            video.muted = true;
+            video.playsInline = true;
+            video.preload = "metadata";
+            item.appendChild(video);
 
-        item.addEventListener("click", () => openPhotoViewer(photo.id));
+            const playOverlay = document.createElement("div");
+            playOverlay.className = "gallery-video-play";
+            playOverlay.textContent = "▶";
+            item.appendChild(playOverlay);
+        } else {
+            const image = document.createElement("img");
+            const url = URL.createObjectURL(itemData.blob);
+            galleryObjectURLs.push(url);
+
+            image.src = url;
+            item.appendChild(image);
+        }
+
+        item.addEventListener("click", () => openPhotoViewer(itemData.id));
         galleryGrid.appendChild(item);
     });
+
+    updateGalleryFilterUI();
 }
 
 
@@ -854,32 +1136,92 @@ async function loadGallery() {
 ========================================================= */
 
 async function openPhotoViewer(id) {
-    const photo = await getPhoto(id);
-    if (!photo) return;
+    const item = await getPhoto(id);
+    if (!item) return;
 
     currentPhotoId = id;
+    currentViewerType = item.type === "video" ? "video" : "photo";
+
+    if (galleryFilter === "all") {
+        allPhotosList = [...allMediaList];
+    } else if (galleryFilter === "photo") {
+        allPhotosList = allMediaList.filter(media => media.type !== "video");
+    } else {
+        allPhotosList = allMediaList.filter(media => media.type === "video");
+    }
 
     if (currentPhotoURL) {
         URL.revokeObjectURL(currentPhotoURL);
+        currentPhotoURL = null;
     }
 
-    currentPhotoURL = URL.createObjectURL(photo.blob);
+    if (currentViewerVideoURL) {
+        URL.revokeObjectURL(currentViewerVideoURL);
+        currentViewerVideoURL = null;
+    }
 
     viewerImage.style.transition = "none";
-    viewerImage.src = currentPhotoURL;
+    viewerImage.src = "";
+    viewerImage.style.transform = "translate(0px, 0px)";
+    adjacentImage.style.display = "none";
+    adjacentVideo.style.display = "none";
+    viewerVideo.pause();
+    viewerVideo.removeAttribute("src");
+    viewerVideo.load();
 
-    viewerRotation = 0;
-    resetViewerZoom();
+    if (currentViewerType === "video") {
+        currentViewerVideoURL = URL.createObjectURL(item.blob);
+        viewerVideo.src = currentViewerVideoURL;
+        viewerVideo.currentTime = 0;
+        viewerImage.classList.add("hidden");
+        viewerVideo.classList.remove("hidden");
+        videoPlayButton.classList.remove("hidden");
+        videoTimelineWrap.classList.remove("hidden");
+        viewerRotateButton.classList.add("hidden");
+        viewerZoom = 1;
+        viewerPositionX = 0;
+        viewerPositionY = 0;
+    } else {
+        currentPhotoURL = URL.createObjectURL(item.blob);
+        viewerImage.src = currentPhotoURL;
+        viewerImage.classList.remove("hidden");
+        viewerVideo.classList.add("hidden");
+        videoPlayButton.classList.add("hidden");
+        videoTimelineWrap.classList.add("hidden");
+        viewerRotateButton.classList.remove("hidden");
+        viewerRotation = 0;
+        resetViewerZoom();
+    }
 
+    updateViewerControls();
     photoViewer.classList.remove("hidden");
+}
+
+function updateViewerControls() {
+    const isVideo = currentViewerType === "video";
+
+    videoPlayButton.classList.toggle("hidden", !isVideo);
+    videoTimelineWrap.classList.toggle("hidden", !isVideo);
+    viewerRotateButton.classList.toggle("hidden", isVideo);
+
+    if (!isVideo) {
+        viewerZoomText.textContent = `${viewerZoom.toFixed(1)}×`;
+    }
 }
 
 function closePhotoViewer() {
     photoViewer.classList.add("hidden");
 
+    viewerVideo.pause();
+
     if (currentPhotoURL) {
         URL.revokeObjectURL(currentPhotoURL);
         currentPhotoURL = null;
+    }
+
+    if (currentViewerVideoURL) {
+        URL.revokeObjectURL(currentViewerVideoURL);
+        currentViewerVideoURL = null;
     }
 
     if (adjacentPhotoURL) {
@@ -890,16 +1232,24 @@ function closePhotoViewer() {
     viewerImage.style.transition = "none";
     viewerImage.src = "";
 
+    viewerVideo.removeAttribute("src");
+    viewerVideo.load();
+
     adjacentImage.style.display = "none";
     adjacentImage.src = "";
+    adjacentVideo.pause();
+    adjacentVideo.removeAttribute("src");
+    adjacentVideo.load();
+    adjacentVideo.style.display = "none";
 
     currentPhotoId = null;
+    currentViewerType = "photo";
     viewerRotation = 0;
 
     resetViewerZoom();
 }
 
-function navigatePhoto(direction) {
+async function navigatePhoto(direction) {
     if (!currentPhotoId || allPhotosList.length <= 1) {
         return;
     }
@@ -907,72 +1257,65 @@ function navigatePhoto(direction) {
     const currentIndex = allPhotosList.findIndex(p => p.id === currentPhotoId);
     if (currentIndex === -1) return;
 
-    let targetIndex = currentIndex + direction;
+    const targetIndex = currentIndex + direction;
 
     if (targetIndex < 0 || targetIndex >= allPhotosList.length) {
         resetViewerTransformSmooth();
         return;
     }
 
-    const nextPhotoId = allPhotosList[targetIndex].id;
+    const nextItem = allPhotosList[targetIndex];
     const windowWidth = window.innerWidth;
     const duration = 250;
 
     viewerImage.style.transition =
         `transform ${duration}ms cubic-bezier(0.25, 1, 0.5, 1)`;
-
+    viewerVideo.style.transition =
+        `transform ${duration}ms cubic-bezier(0.25, 1, 0.5, 1)`;
     adjacentImage.style.transition =
+        `transform ${duration}ms cubic-bezier(0.25, 1, 0.5, 1)`;
+    adjacentVideo.style.transition =
         `transform ${duration}ms cubic-bezier(0.25, 1, 0.5, 1)`;
 
     const mainExitX = direction > 0 ? -windowWidth : windowWidth;
 
-    viewerImage.style.transform =
+    const currentElement =
+        currentViewerType === "video" ? viewerVideo : viewerImage;
+
+    currentElement.style.transform =
         `translate(${mainExitX}px, 0px) rotate(${viewerRotation}deg) scale(${getViewerFitScale() * viewerZoom})`;
 
-    adjacentImage.style.transform = "translate(0px, 0px) scale(1)";
+    const adjacentElement =
+        nextItem.type === "video" ? adjacentVideo : adjacentImage;
+
+    adjacentElement.style.transform = "translate(0px, 0px) scale(1)";
+    adjacentElement.style.display = "block";
 
     setTimeout(async () => {
-        currentPhotoId = nextPhotoId;
-        viewerRotation = 0;
-
-        if (currentPhotoURL) {
-            URL.revokeObjectURL(currentPhotoURL);
-        }
-
-        currentPhotoURL = adjacentPhotoURL;
-        adjacentPhotoURL = null;
-
-        viewerImage.style.transition = "none";
-        viewerImage.src = currentPhotoURL;
-        viewerImage.style.transform =
-            `translate(0px, 0px) rotate(0deg) scale(${getViewerFitScale()})`;
-
-        adjacentImage.style.display = "none";
-        adjacentImage.src = "";
-
-        resetViewerZoom();
-
+        await openPhotoViewer(nextItem.id);
     }, duration);
 }
 
 async function downloadCurrentPhoto() {
     if (!currentPhotoId) return;
 
-    const photo = await getPhoto(currentPhotoId);
-    if (!photo || !photo.blob) return;
+    const item = await getPhoto(currentPhotoId);
+    if (!item || !item.blob) return;
 
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        const dataUrl = e.target.result;
-        const link = document.createElement("a");
-        link.href = dataUrl;
-        link.download = `photo_${Date.now()}.jpg`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
+    const extension =
+        currentViewerType === "video"
+            ? (item.blob.type.includes("mp4") ? "mp4" : "webm")
+            : "jpg";
 
-    reader.readAsDataURL(photo.blob);
+    const url = URL.createObjectURL(item.blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${currentViewerType === "video" ? "video" : "photo"}_${Date.now()}.${extension}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 
@@ -1031,6 +1374,13 @@ function clampViewerPosition() {
 }
 
 function updateViewerTransform() {
+    if (currentViewerType === "video") {
+        viewerVideo.style.transform =
+            `translate(${viewerPositionX}px, ${viewerPositionY}px) scale(${viewerZoom})`;
+        viewerZoomText.textContent = `${viewerZoom.toFixed(1)}×`;
+        return;
+    }
+
     clampViewerPosition();
     const fitScale = getViewerFitScale();
 
@@ -1041,23 +1391,39 @@ function updateViewerTransform() {
 }
 
 function resetViewerTransformSmooth() {
-    viewerImage.style.transition = "transform 0.2s cubic-bezier(0.25, 1, 0.5, 1)";
-    adjacentImage.style.transition = "transform 0.2s cubic-bezier(0.25, 1, 0.5, 1)";
+    const currentElement =
+        currentViewerType === "video" ? viewerVideo : viewerImage;
 
-    viewerImage.style.transform =
-        `translate(0px, 0px) rotate(${viewerRotation}deg) scale(${getViewerFitScale() * viewerZoom})`;
+    currentElement.style.transition =
+        "transform 0.2s cubic-bezier(0.25, 1, 0.5, 1)";
+    adjacentImage.style.transition =
+        "transform 0.2s cubic-bezier(0.25, 1, 0.5, 1)";
+    adjacentVideo.style.transition =
+        "transform 0.2s cubic-bezier(0.25, 1, 0.5, 1)";
+
+    if (currentViewerType === "video") {
+        viewerVideo.style.transform =
+            `translate(0px, 0px) scale(${viewerZoom})`;
+    } else {
+        viewerImage.style.transform =
+            `translate(0px, 0px) rotate(${viewerRotation}deg) scale(${getViewerFitScale() * viewerZoom})`;
+    }
 
     const deltaX = swipeCurrentX - swipeStartX;
     const windowWidth = window.innerWidth;
+    const shownAdjacent =
+        adjacentImage.style.display !== "none"
+            ? adjacentImage
+            : adjacentVideo;
 
-    if (deltaX < 0) {
-        adjacentImage.style.transform = `translate(${windowWidth}px, 0px) scale(1)`;
-    } else {
-        adjacentImage.style.transform = `translate(${-windowWidth}px, 0px) scale(1)`;
+    if (shownAdjacent.style.display !== "none") {
+        shownAdjacent.style.transform =
+            `translate(${deltaX < 0 ? windowWidth : -windowWidth}px, 0px) scale(1)`;
     }
 
     setTimeout(() => {
         adjacentImage.style.display = "none";
+        adjacentVideo.style.display = "none";
         resetViewerZoom();
     }, 200);
 }
@@ -1068,12 +1434,14 @@ function setViewerZoom(value) {
 }
 
 function zoomViewerIn() {
-    viewerImage.style.transition = "transform 0.2s ease-out";
+    const target = currentViewerType === "video" ? viewerVideo : viewerImage;
+    target.style.transition = "transform 0.2s ease-out";
     setViewerZoom(viewerZoom + 0.5);
 }
 
 function zoomViewerOut() {
-    viewerImage.style.transition = "transform 0.2s ease-out";
+    const target = currentViewerType === "video" ? viewerVideo : viewerImage;
+    target.style.transition = "transform 0.2s ease-out";
     setViewerZoom(viewerZoom - 0.5);
 }
 
@@ -1082,6 +1450,7 @@ function resetViewerZoom() {
     viewerPositionX = 0;
     viewerPositionY = 0;
     viewerRotation = 0;
+    viewerVideo.style.transform = "translate(0px, 0px) scale(1)";
     updateViewerTransform();
 }
 
@@ -1099,19 +1468,41 @@ async function prepareAdjacentImage(direction) {
 
     if (targetIndex < 0 || targetIndex >= allPhotosList.length) {
         adjacentImage.style.display = "none";
+        adjacentVideo.style.display = "none";
         return false;
     }
 
-    const photo = await getPhoto(allPhotosList[targetIndex].id);
-    if (!photo) return false;
+    const item = await getPhoto(allPhotosList[targetIndex].id);
+    if (!item) return false;
+
+    adjacentImage.style.display = "none";
+    adjacentVideo.style.display = "none";
 
     if (adjacentPhotoURL) {
         URL.revokeObjectURL(adjacentPhotoURL);
+        adjacentPhotoURL = null;
     }
 
-    adjacentPhotoURL = URL.createObjectURL(photo.blob);
-    adjacentImage.src = adjacentPhotoURL;
-    adjacentImage.style.display = "block";
+    if (item.type === "video") {
+        if (adjacentVideo.src) {
+            adjacentVideo.removeAttribute("src");
+            adjacentVideo.load();
+        }
+
+        const url = URL.createObjectURL(item.blob);
+        adjacentVideo.src = url;
+        adjacentVideo.muted = true;
+        adjacentVideo.playsInline = true;
+        adjacentVideo.dataset.dir = direction;
+        adjacentVideo.dataset.id = item.id;
+        adjacentVideo.style.display = "block";
+    } else {
+        adjacentPhotoURL = URL.createObjectURL(item.blob);
+        adjacentImage.src = adjacentPhotoURL;
+        adjacentImage.dataset.dir = direction;
+        adjacentImage.dataset.id = item.id;
+        adjacentImage.style.display = "block";
+    }
 
     return true;
 }
@@ -1122,7 +1513,9 @@ photoZoomArea.addEventListener("pointerdown", function(event) {
     }
 
     viewerImage.style.transition = "none";
+    viewerVideo.style.transition = "none";
     adjacentImage.style.transition = "none";
+    adjacentVideo.style.transition = "none";
 
     if (viewerZoom > 1) {
         viewerDragging = true;
@@ -1141,7 +1534,7 @@ photoZoomArea.addEventListener("pointerdown", function(event) {
 });
 
 photoZoomArea.addEventListener("pointermove", async function(event) {
-    if (viewerZoom > 1 && viewerDragging) {
+    if (viewerZoom > 1 && viewerDragging && currentViewerType === "photo") {
         const dx = event.clientX - viewerDragStartX;
         const dy = event.clientY - viewerDragStartY;
 
@@ -1159,38 +1552,55 @@ photoZoomArea.addEventListener("pointermove", async function(event) {
         const isFirst = currentIndex === 0;
         const isLast = currentIndex === allPhotosList.length - 1;
 
+        const currentElement =
+            currentViewerType === "video" ? viewerVideo : viewerImage;
+
         if ((isFirst && deltaX > 0) || (isLast && deltaX < 0)) {
-            viewerImage.style.transform =
+            currentElement.style.transform =
                 `translate(0px, 0px) rotate(${viewerRotation}deg) scale(${getViewerFitScale() * viewerZoom})`;
 
             adjacentImage.style.display = "none";
+            adjacentVideo.style.display = "none";
             return;
         }
 
         const direction = deltaX < 0 ? 1 : -1;
 
+        const activeAdjacent =
+            adjacentImage.style.display !== "none"
+                ? adjacentImage
+                : adjacentVideo;
+
         if (
-            adjacentImage.style.display === "none" ||
-            adjacentImage.dataset.dir != direction
+            adjacentImage.style.display === "none" &&
+            adjacentVideo.style.display === "none"
         ) {
             const loaded = await prepareAdjacentImage(direction);
             if (!loaded) return;
-
-            adjacentImage.dataset.dir = direction;
+        } else if (
+            activeAdjacent.dataset.dir != direction
+        ) {
+            const loaded = await prepareAdjacentImage(direction);
+            if (!loaded) return;
         }
 
         const adjacentOffsetX = direction > 0 ? windowWidth : -windowWidth;
 
-        viewerImage.style.transform =
+        currentElement.style.transform =
             `translate(${deltaX}px, 0px) rotate(${viewerRotation}deg) scale(${getViewerFitScale()})`;
 
-        adjacentImage.style.transform =
+        const shownAdjacent =
+            adjacentImage.style.display !== "none"
+                ? adjacentImage
+                : adjacentVideo;
+
+        shownAdjacent.style.transform =
             `translate(${adjacentOffsetX + deltaX}px, 0px) scale(1)`;
     }
 });
 
 function handleSwipeEnd() {
-    if (viewerZoom > 1) {
+    if (viewerZoom > 1 && currentViewerType === "photo") {
         viewerDragging = false;
     } else if (isSwiping) {
         isSwiping = false;
@@ -1222,6 +1632,7 @@ photoZoomArea.addEventListener("touchstart", function(event) {
 
     isSwiping = false;
     adjacentImage.style.display = "none";
+    adjacentVideo.style.display = "none";
     viewerImage.style.transition = "none";
 
     viewerPinchStartDistance = getDistance(event.touches[0], event.touches[1]);
@@ -1279,7 +1690,7 @@ window.addEventListener("keydown", function(event) {
 async function deleteCurrentPhoto() {
     if (currentPhotoId === null) return;
 
-    if (!confirm("이 사진을 삭제할까요?")) return;
+    if (!confirm(currentViewerType === "video" ? "이 동영상을 삭제할까요?" : "이 사진을 삭제할까요?")) return;
 
     try {
         await deletePhotoFromDatabase(currentPhotoId);
@@ -1307,6 +1718,31 @@ async function deleteAllPhotos() {
     } catch (error) {
         console.error("전체 삭제 실패", error);
         alert("사진을 삭제하지 못했습니다.");
+    }
+}
+
+
+function toggleViewerVideoPlayback() {
+    if (currentViewerType !== "video") return;
+
+    if (viewerVideo.paused) {
+        viewerVideo.play().catch(() => {});
+    } else {
+        viewerVideo.pause();
+    }
+}
+
+function updateViewerVideoPlayButton() {
+    if (currentViewerType !== "video") return;
+    videoPlayButton.textContent = viewerVideo.paused ? "▶" : "❚❚";
+}
+
+function updateViewerVideoTimeline() {
+    if (currentViewerType !== "video") return;
+
+    if (Number.isFinite(viewerVideo.duration) && viewerVideo.duration > 0) {
+        videoTimeline.max = viewerVideo.duration;
+        videoTimeline.value = viewerVideo.currentTime;
     }
 }
 
@@ -1340,6 +1776,23 @@ deleteAllButton.addEventListener("click", deleteAllPhotos);
 zoomInButton.addEventListener("click", zoomViewerIn);
 zoomOutButton.addEventListener("click", zoomViewerOut);
 resetZoomButton.addEventListener("click", resetViewerZoom);
+
+videoModeButton.addEventListener("click", toggleVideoMode);
+galleryAllButton.addEventListener("click", () => setGalleryFilter("all"));
+galleryPhotoButton.addEventListener("click", () => setGalleryFilter("photo"));
+galleryVideoButton.addEventListener("click", () => setGalleryFilter("video"));
+
+videoPlayButton.addEventListener("click", toggleViewerVideoPlayback);
+viewerVideo.addEventListener("play", updateViewerVideoPlayButton);
+viewerVideo.addEventListener("pause", updateViewerVideoPlayButton);
+viewerVideo.addEventListener("timeupdate", updateViewerVideoTimeline);
+viewerVideo.addEventListener("loadedmetadata", updateViewerVideoTimeline);
+
+videoTimeline.addEventListener("input", () => {
+    if (currentViewerType === "video") {
+        viewerVideo.currentTime = Number(videoTimeline.value);
+    }
+});
 
 
 /* =========================================================
