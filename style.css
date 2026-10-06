@@ -66,6 +66,10 @@ button {
     object-fit: cover;
     background: #000;
     transform-origin: center center;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-user-drag: none;
 }
 
 
@@ -77,6 +81,13 @@ button {
     position: absolute;
     inset: 0;
     z-index: 10;
+    pointer-events: none;
+}
+
+#cameraUI button,
+#cameraUI input,
+#cameraUI a {
+    pointer-events: auto;
 }
 
 
