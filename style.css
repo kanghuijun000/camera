@@ -66,10 +66,6 @@ button {
     object-fit: cover;
     background: #000;
     transform-origin: center center;
-    touch-action: none;
-    user-select: none;
-    -webkit-user-select: none;
-    -webkit-user-drag: none;
 }
 
 
@@ -81,13 +77,6 @@ button {
     position: absolute;
     inset: 0;
     z-index: 10;
-    pointer-events: none;
-}
-
-#cameraUI button,
-#cameraUI input,
-#cameraUI a {
-    pointer-events: auto;
 }
 
 
@@ -304,7 +293,7 @@ button {
 }
 
 #videoModeButton.active {
-    background: rgba(0,0,0,0.48);
+    background: rgba(190,0,0,0.72);
 }
 
 
@@ -598,6 +587,8 @@ button {
 
     color: #000;
 }
+
+
 /* =========================================================
    갤러리
 ========================================================= */
@@ -1160,6 +1151,8 @@ button {
 .viewer-reset-button:active {
     transform: scale(0.95);
 }
+
+
 /* =========================================================
    동영상 재생 버튼
 ========================================================= */
@@ -1231,6 +1224,42 @@ button {
     cursor: pointer;
 }
 
+.video-timeline-time {
+    position: absolute;
+
+    left: 0;
+    bottom: calc(100% + 4px);
+
+    transform: translateX(-50%);
+
+    padding: 3px 7px;
+
+    border-radius: 8px;
+
+    background: rgba(0,0,0,0.72);
+
+    color: #fff;
+
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+
+    white-space: nowrap;
+    pointer-events: none;
+
+    opacity: 0;
+    visibility: hidden;
+
+    z-index: 226;
+
+    transition: opacity 0.08s ease, visibility 0.08s ease;
+}
+
+.video-timeline-wrap.seeking .video-timeline-time {
+    opacity: 1;
+    visibility: visible;
+}
+
 
 /* =========================================================
    삭제 / 다운로드
@@ -1293,82 +1322,6 @@ button {
 
 @media screen and (orientation: landscape) {
 
-    /*
-       카메라 UI는 세로 화면의 배치 관계를 그대로 유지한 채
-       전체적으로 반시계 방향 90도 회전한다.
-       따라서 버튼의 위치를 하나씩 다시 계산하지 않는다.
-    */
-    #cameraUI {
-        position: absolute;
-
-        top: 50%;
-        left: 50%;
-        right: auto;
-        bottom: auto;
-
-        width: 100vh;
-        height: 100vw;
-
-        transform: translate(-50%, -50%) rotate(-90deg);
-        transform-origin: center center;
-    }
-
-    /*
-       버튼의 내용은 가로 화면에서 똑바로 보이도록
-       각 버튼 자체를 다시 90도 돌린다.
-       위치는 부모 UI의 회전으로 이미 올바르게 이동한다.
-    */
-    #cameraPowerButton,
-    #cameraPowerButtonOff,
-    #videoModeButton,
-    .gallery-open-button,
-    #switchCameraButton {
-        transform: rotate(90deg);
-    }
-
-    .capture-button {
-        transform: translateX(-50%) rotate(90deg);
-    }
-
-    #cameraPowerButton:active,
-    #cameraPowerButtonOff:active,
-    #videoModeButton:active,
-    .gallery-open-button:active,
-    #switchCameraButton:active {
-        transform: rotate(90deg) scale(0.94);
-    }
-
-    .capture-button:active {
-        transform: translateX(-50%) rotate(90deg) scale(0.93);
-    }
-
-    /*
-       줌 배율만 별도로 가로 화면 상단 중앙으로 이동한다.
-       부모 UI가 회전되어 있으므로 논리 좌표상 오른쪽 중앙에 둔 뒤
-       다시 90도 회전시킨다.
-    */
-    #cameraZoomIndicator {
-        top: 50%;
-        left: auto;
-        right: 14px;
-
-        transform: translateY(-50%) rotate(90deg);
-    }
-
-    /*
-       세로 화면에서 촬영 버튼 위에 있던 타이머/연사 카운터는
-       부모 UI가 회전하면서 촬영 버튼의 바로 왼쪽으로 이동한다.
-       내용만 다시 90도 회전하여 가로 화면에서 똑바로 보이게 한다.
-    */
-    .video-timer {
-        transform: translateX(-50%) rotate(90deg);
-    }
-
-    .burst-counter {
-        transform: translateX(-50%) rotate(90deg);
-    }
-
-    /* 갤러리 화면 자체의 가로 레이아웃은 기존 규칙 그대로 유지 */
     .gallery-grid {
         grid-template-columns: repeat(5, minmax(0,1fr));
     }
