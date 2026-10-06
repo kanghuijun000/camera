@@ -40,6 +40,7 @@ const viewerVideo = document.getElementById("viewerVideo");
 const videoPlayButton = document.getElementById("videoPlayButton");
 const videoTimelineWrap = document.getElementById("videoTimelineWrap");
 const videoTimeline = document.getElementById("videoTimeline");
+const videoTimelineTime = document.getElementById("videoTimelineTime");
 const galleryAllButton = document.getElementById("galleryAllButton");
 const galleryPhotoButton = document.getElementById("galleryPhotoButton");
 const galleryVideoButton = document.getElementById("galleryVideoButton");
@@ -882,10 +883,6 @@ function updateVideoModeUI() {
 
     videoModeButton.classList.toggle("active", videoMode);
 
-    // 사진 모드 → 동영상 아이콘
-    // 동영상 모드 → 사진 아이콘
-    videoModeButton.textContent = videoMode ? "📷" : "🎥";
-
     if (videoMode) {
         captureButton.classList.add("video-mode");
         captureButton.setAttribute("aria-label", "동영상 촬영");
@@ -1181,6 +1178,9 @@ async function openPhotoViewer(id) {
         viewerVideo.classList.remove("hidden");
         videoPlayButton.classList.remove("hidden");
         videoTimelineWrap.classList.remove("hidden");
+        videoTimelineWrap.classList.remove("seeking");
+        videoTimeline.value = 0;
+        updateVideoTimelineTime(0);
         viewerRotateButton.classList.add("hidden");
         viewerZoom = 1;
         viewerPositionX = 0;
@@ -1192,6 +1192,7 @@ async function openPhotoViewer(id) {
         viewerVideo.classList.add("hidden");
         videoPlayButton.classList.add("hidden");
         videoTimelineWrap.classList.add("hidden");
+        videoTimelineWrap.classList.remove("seeking");
         viewerRotateButton.classList.remove("hidden");
         viewerRotation = 0;
         resetViewerZoom();
@@ -1215,6 +1216,7 @@ function updateViewerControls() {
 
 function closePhotoViewer() {
     photoViewer.classList.add("hidden");
+    videoTimelineWrap.classList.remove("seeking");
 
     viewerVideo.pause();
 
@@ -1746,9 +1748,54 @@ function updateViewerVideoTimeline() {
 
     if (Number.isFinite(viewerVideo.duration) && viewerVideo.duration > 0) {
         videoTimeline.max = viewerVideo.duration;
-        videoTimeline.value = viewerVideo.currentTime;
+
+        // 타임라인을 직접 조작하고 있는 동안에는
+        // 사용자가 고르고 있는 값을 그대로 유지한다.
+        if (!videoTimelineWrap.classList.contains("seeking")) {
+            videoTimeline.value = viewerVideo.currentTime;
+        }
+
+        updateVideoTimelineTime(
+            videoTimelineWrap.classList.contains("seeking")
+                ? Number(videoTimeline.value)
+                : viewerVideo.currentTime
+        );
     }
 }
+
+function updateVideoTimelineTime(seconds) {
+    if (!videoTimelineTime || !videoTimelineWrap) return;
+
+    const duration = Number(videoTimeline.max);
+    const current = Number(seconds);
+
+    if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(current)) {
+        videoTimelineTime.textContent = "00:00";
+        videoTimelineTime.style.left = "0%";
+        return;
+    }
+
+    const clamped = Math.max(0, Math.min(duration, current));
+    const percent = (clamped / duration) * 100;
+
+    videoTimelineTime.textContent = formatVideoTime(clamped);
+    videoTimelineTime.style.left = `${percent}%`;
+}
+
+function beginVideoTimelineSeeking() {
+    if (currentViewerType !== "video") return;
+
+    videoTimelineWrap.classList.add("seeking");
+    updateVideoTimelineTime(Number(videoTimeline.value));
+}
+
+function endVideoTimelineSeeking() {
+    if (!videoTimelineWrap) return;
+
+    videoTimelineWrap.classList.remove("seeking");
+    updateVideoTimelineTime(viewerVideo.currentTime);
+}
+
 
 
 /* =========================================================
@@ -1792,11 +1839,27 @@ viewerVideo.addEventListener("pause", updateViewerVideoPlayButton);
 viewerVideo.addEventListener("timeupdate", updateViewerVideoTimeline);
 viewerVideo.addEventListener("loadedmetadata", updateViewerVideoTimeline);
 
+videoTimeline.addEventListener("pointerdown", beginVideoTimelineSeeking);
+
 videoTimeline.addEventListener("input", () => {
     if (currentViewerType === "video") {
-        viewerVideo.currentTime = Number(videoTimeline.value);
+        videoTimelineWrap.classList.add("seeking");
+        const currentTime = Number(videoTimeline.value);
+        viewerVideo.currentTime = currentTime;
+        updateVideoTimelineTime(currentTime);
     }
 });
+
+videoTimeline.addEventListener("pointerup", endVideoTimelineSeeking);
+videoTimeline.addEventListener("pointercancel", endVideoTimelineSeeking);
+videoTimeline.addEventListener("lostpointercapture", endVideoTimelineSeeking);
+
+videoTimeline.addEventListener("touchstart", beginVideoTimelineSeeking, { passive: true });
+videoTimeline.addEventListener("touchend", endVideoTimelineSeeking, { passive: true });
+videoTimeline.addEventListener("touchcancel", endVideoTimelineSeeking, { passive: true });
+
+videoTimeline.addEventListener("mousedown", beginVideoTimelineSeeking);
+videoTimeline.addEventListener("mouseup", endVideoTimelineSeeking);
 
 
 /* =========================================================
