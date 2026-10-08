@@ -66,6 +66,12 @@ button {
     object-fit: cover;
     background: #000;
     transform-origin: center center;
+
+    /* 카메라 핀치 줌 터치가 UI에 막히지 않도록 */
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-user-drag: none;
 }
 
 
@@ -77,6 +83,18 @@ button {
     position: absolute;
     inset: 0;
     z-index: 10;
+
+    /*
+       전체 화면 UI 컨테이너 자체는
+       카메라 미리보기의 터치를 막지 않도록 한다.
+    */
+    pointer-events: none;
+}
+
+#cameraUI button,
+#cameraUI input,
+#cameraUI a {
+    pointer-events: auto;
 }
 
 
@@ -93,8 +111,7 @@ button {
 
 
 /* 꺼진 상태의 전원 버튼
-   이전 위치: 오른쪽 중앙
-   수정 위치: 왼쪽 상단
+   기본 세로화면 위치
 ========================================================= */
 
 #cameraPowerButtonOff {
@@ -193,7 +210,6 @@ button {
 
 /* =========================================================
    카메라 전원 버튼
-   켜진 화면에서도 왼쪽 상단 고정
 ========================================================= */
 
 #cameraPowerButton {
@@ -917,15 +933,7 @@ button {
 
 
 /*
-   중요:
    JS가 transform을 직접 제어한다.
-
-   기존에는 top:50%, left:50%였는데
-   JS의 translate()와 충돌해서
-   사진/영상이 중앙이 아니라 구석에 박히는 문제가 발생했다.
-
-   따라서 뷰어 요소 자체를 전체 영역으로 만들고
-   object-fit: contain으로 실제 미디어를 중앙에 맞춘다.
 */
 
 #viewerImage,
@@ -1202,18 +1210,20 @@ button {
     left: 14px;
     right: 14px;
 
-    bottom: 72px;
+    bottom: 66px;
 
-    height: 24px;
-
-    display: flex;
-
-    align-items: center;
+    height: 44px;
 
     z-index: 225;
 }
 
 .video-timeline {
+    position: absolute;
+
+    left: 0;
+    right: 0;
+    top: 20px;
+
     width: 100%;
     height: 4px;
 
@@ -1224,40 +1234,56 @@ button {
     cursor: pointer;
 }
 
-.video-timeline-time {
+
+/* 현재 재생 위치 표시
+   진행점 위치를 JS에서 실시간으로 변경 */
+.video-current-time-label {
     position: absolute;
 
-    left: 0;
-    bottom: calc(100% + 4px);
+    top: 0;
 
     transform: translateX(-50%);
 
-    padding: 3px 7px;
-
-    border-radius: 8px;
-
-    background: rgba(0,0,0,0.72);
+    min-width: 38px;
 
     color: #fff;
 
     font-size: 11px;
-    font-weight: 600;
-    line-height: 1;
+    line-height: 14px;
+
+    text-align: center;
 
     white-space: nowrap;
+
     pointer-events: none;
 
-    opacity: 0;
-    visibility: hidden;
-
-    z-index: 226;
-
-    transition: opacity 0.08s ease, visibility 0.08s ease;
+    z-index: 2;
 }
 
-.video-timeline-wrap.seeking .video-timeline-time {
-    opacity: 1;
-    visibility: visible;
+
+/* 양쪽 고정 시간 표시 */
+.video-timeline-start-label,
+.video-timeline-duration-label {
+    position: absolute;
+
+    top: 29px;
+
+    color: rgba(255,255,255,0.9);
+
+    font-size: 10px;
+    line-height: 12px;
+
+    white-space: nowrap;
+
+    pointer-events: none;
+}
+
+.video-timeline-start-label {
+    left: 0;
+}
+
+.video-timeline-duration-label {
+    right: 0;
 }
 
 
@@ -1483,5 +1509,24 @@ button {
 
     button:hover {
         filter: none;
+    }
+}
+
+
+/* =========================================================
+   가로 화면 - 카메라 OFF 전원 버튼
+   카메라가 꺼진 상태에서만 적용
+========================================================= */
+
+@media screen and (orientation: landscape) {
+
+    #cameraPowerButtonOff {
+        left: 14px;
+        right: auto;
+
+        top: auto;
+        bottom: calc(14px + env(safe-area-inset-bottom));
+
+        transform: none;
     }
 }
